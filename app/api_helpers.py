@@ -466,6 +466,7 @@ async def execute_gemini_call(
                         ):
                             retry_count += 1
                             retries_on_current_node += 1
+                            print(f"WARNING: Retryable Gemini stream error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(e_stream_call)[:800]}")
                             if retries_on_current_node >= retries_before_switch:
                                 if await switch_next_node(f"retryable stream error while calling {model_to_call}: {type(e_stream_call).__name__}"):
                                     retries_on_current_node = 0
@@ -506,6 +507,7 @@ async def execute_gemini_call(
                 ):
                     retry_count += 1
                     retries_on_current_node += 1
+                    print(f"WARNING: Retryable Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(e_call)[:800]}")
                     if retries_on_current_node >= retries_before_switch:
                         if not await switch_next_node(f"retryable error while calling {model_to_call}: {type(e_call).__name__}"):
                             raise

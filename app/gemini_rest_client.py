@@ -161,6 +161,26 @@ def _proxies() -> Optional[dict[str, str]]:
     return {"http": proxy_url, "https": proxy_url}
 
 
+async def _raise_for_status_with_body(response: Any) -> None:
+    status_code = int(getattr(response, "status_code", 0) or 0)
+    if status_code < 400:
+        return
+
+    body = ""
+    try:
+        body = await response.atext()
+    except Exception:
+        try:
+            body = str(getattr(response, "text", "") or "")
+        except Exception:
+            body = ""
+
+    body = " ".join(body.split())
+    if len(body) > 1200:
+        body = body[:1200] + "..."
+    raise RuntimeError(f"HTTP {status_code} from Gemini REST: {body}")
+
+
 async def generate_content(
     ctx: GeminiRestClientContext,
     model: str,
@@ -172,7 +192,7 @@ async def generate_content(
     print(f"INFO: Executing Gemini REST call (curl_cffi) to '{model}'. Proxy: {app_config.PROXY_URL or 'None'}")
     async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
         response = await session.post(url, json=payload, headers=_headers(ctx), timeout=300)
-        response.raise_for_status()
+        await _raise_for_status_with_body(response)
         return _wrap_response(response.json())
 
 
@@ -187,7 +207,7 @@ async def stream_generate_content(
     print(f"INFO: Executing Gemini REST stream (curl_cffi) to '{model}'. Proxy: {app_config.PROXY_URL or 'None'}")
     async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
         async with session.stream("POST", url, json=payload, headers=_headers(ctx), timeout=300) as response:
-            response.raise_for_status()
+            await _raise_for_status_with_body(response)
             async for line in response.aiter_lines():
                 if isinstance(line, bytes):
                     line = line.decode("utf-8", errors="replace")
