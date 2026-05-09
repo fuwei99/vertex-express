@@ -9,6 +9,7 @@ set "VENV_DIR=%SCRIPT_DIR%.venv"
 set "PYTHON_EXE=%VENV_DIR%\Scripts\python.exe"
 set "SEED_PYTHON_EXE=%SCRIPT_DIR%..\vertex2api\.venv\Scripts\python.exe"
 set "REQ_FILE=%SCRIPT_DIR%requirements.txt"
+set "CONFIG_FILE=%SCRIPT_DIR%config.json"
 set "ENV_FILE=%SCRIPT_DIR%.env"
 set "HOST=127.0.0.1"
 set "PORT=8050"
@@ -81,7 +82,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if exist "%ENV_FILE%" (
+if exist "%CONFIG_FILE%" (
+    echo [INFO] Found config.json. The application will load it on startup.
+) else if exist "%ENV_FILE%" (
     echo [INFO] Loading environment variables from .env...
     for /f "usebackq tokens=* delims=" %%L in ("%ENV_FILE%") do (
         set "LINE=%%L"
@@ -94,19 +97,7 @@ if exist "%ENV_FILE%" (
         )
     )
 ) else (
-    echo [WARN] .env file not found. The server will rely on existing environment variables.
-)
-
-if "%API_KEY%"=="" (
-    echo [ERROR] API_KEY is missing.
-    echo [HINT] Add API_KEY to .env before starting the server.
-    exit /b 1
-)
-
-if "%VERTEX_EXPRESS_API_KEY%"=="" (
-    echo [ERROR] VERTEX_EXPRESS_API_KEY is missing.
-    echo [HINT] Add one or more Vertex Express keys to .env before starting the server.
-    exit /b 1
+    echo [WARN] config.json and .env were not found. The server will rely on existing environment variables.
 )
 
 echo [INFO] Starting Vertex API on http://%HOST%:%PORT%

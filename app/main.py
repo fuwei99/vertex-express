@@ -3,6 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from pathlib import Path
+from config_store import CONFIG_FILE, apply_config_json_to_env
+
+if CONFIG_FILE.exists():
+    apply_config_json_to_env()
+    print(f"INFO: Loaded configuration from {CONFIG_FILE}")
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 if env_path.exists():

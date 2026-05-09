@@ -1,0 +1,16 @@
+{
+  "api_key": "change-me",
+  "admin_password": "change-me",
+  "vertex_express_api_keys": [
+    "your-express-api-key"
+  ],
+  "subscription_url": "https://example.com/subscribe",
+  "proxy_url": "",
+  "roundrobin": true,
+  "max_retries_429": 6,
+  "retries_before_switch": 1,
+  "fake_streaming": false,
+  "fake_streaming_interval": 1.0,
+  "safety_score": false,
+  "models_config_url": "https://raw.githubusercontent.com/gzzhongqi/vertex2openai/refs/heads/main/vertexModels.json"
+}

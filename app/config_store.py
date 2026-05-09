@@ -1,0 +1,92 @@
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+CONFIG_FILE = ROOT_DIR / "config.json"
+
+_KEY_ALIASES = {
+    "API_KEY": ("api_key",),
+    "ADMIN_PASSWORD": ("admin_password",),
+    "VERTEX_EXPRESS_API_KEY": ("vertex_express_api_key", "vertex_express_api_keys"),
+    "SUBSCRIPTION_URL": ("subscription_url",),
+    "PROXY_URL": ("proxy_url",),
+    "GOOGLE_CREDENTIALS_JSON": ("google_credentials_json",),
+    "CREDENTIALS_DIR": ("credentials_dir",),
+    "HUGGINGFACE": ("huggingface",),
+    "HUGGINGFACE_API_KEY": ("huggingface_api_key",),
+    "FAKE_STREAMING": ("fake_streaming",),
+    "FAKE_STREAMING_INTERVAL": ("fake_streaming_interval",),
+    "MODELS_CONFIG_URL": ("models_config_url",),
+    "ROUNDROBIN": ("roundrobin",),
+    "SAFETY_SCORE": ("safety_score",),
+    "SSL_CERT_FILE": ("ssl_cert_file",),
+    "MAX_RETRIES_429": ("max_retries_429",),
+    "RETRIES_BEFORE_SWITCH": ("retries_before_switch",),
+}
+
+
+def load_config_json() -> dict[str, Any]:
+    if not CONFIG_FILE.exists():
+        return {}
+    try:
+        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        print(f"WARNING: Failed to read config.json: {exc}")
+        return {}
+
+
+def _normalize_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, list):
+        return ",".join(str(item).strip() for item in value if str(item).strip())
+    return str(value)
+
+
+def _lookup(data: dict[str, Any], env_key: str) -> Any:
+    if env_key in data:
+        return data[env_key]
+    for alias in _KEY_ALIASES.get(env_key, ()):
+        if alias in data:
+            return data[alias]
+    return None
+
+
+def apply_config_json_to_env(override: bool = False) -> dict[str, Any]:
+    data = load_config_json()
+    for env_key in _KEY_ALIASES:
+        value = _lookup(data, env_key)
+        if value is None:
+            continue
+        if override or not os.environ.get(env_key):
+            os.environ[env_key] = _normalize_value(value)
+    return data
+
+
+def get_config_value(env_key: str, default: str = "") -> str:
+    raw_env = os.environ.get(env_key, "").strip()
+    if raw_env:
+        return raw_env
+    value = _lookup(load_config_json(), env_key)
+    if value is None:
+        return default
+    return _normalize_value(value).strip()
+
+
+def write_config_values(updates: dict[str, Any]) -> None:
+    data = load_config_json()
+    for env_key, raw_value in updates.items():
+        aliases = _KEY_ALIASES.get(env_key, ())
+        key = aliases[0] if aliases else env_key.lower()
+        if env_key == "VERTEX_EXPRESS_API_KEY" and isinstance(raw_value, str):
+            data[key] = [part.strip() for part in raw_value.split(",") if part.strip()]
+        else:
+            data[key] = raw_value
+        os.environ[env_key] = _normalize_value(raw_value)
+    CONFIG_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

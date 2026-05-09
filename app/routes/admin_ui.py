@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import config as app_config
+from config_store import CONFIG_FILE, get_config_value, write_config_values
 from model_loader import get_models_config
 from transport.codec import clash_to_pseudo_uri, clash_type_letter, needs_worker
 from transport.worker import worker
@@ -43,7 +44,7 @@ _runtime_state: dict[str, Any] = {
 }
 
 def _read_env_value(key: str) -> str:
-    raw = os.environ.get(key, "").strip()
+    raw = get_config_value(key, "").strip()
     if raw:
         return raw
     prefix = f"{key}="
@@ -60,27 +61,7 @@ def _read_env_lines() -> list[str]:
 
 
 def _write_env_mapping(updates: dict[str, str]) -> None:
-    existing_lines = _read_env_lines()
-    data: dict[str, str] = {}
-    order: list[str] = []
-
-    for raw_line in existing_lines:
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in raw_line:
-            continue
-        key, value = raw_line.split("=", 1)
-        key = key.strip()
-        if key not in order:
-            order.append(key)
-        data[key] = value.strip()
-
-    for key, value in updates.items():
-        if key not in order:
-            order.append(key)
-        data[key] = value
-
-    content = "\n".join(f"{key}={data[key]}" for key in order) + "\n"
-    ENV_FILE.write_text(content, encoding="utf-8")
+    write_config_values(updates)
 
 
 _runtime_state["subscription_url"] = _read_env_value("SUBSCRIPTION_URL")
@@ -512,7 +493,7 @@ async def get_settings(request: Request) -> dict[str, Any]:
         "max_retries": int(_runtime_state.get("max_retries", 2)),
         "proxy_url": _runtime_state.get("proxy_url", ""),
         "env_proxy_url_override": env_proxy,
-        "admin_password_env_locked": bool(os.environ.get("ADMIN_PASSWORD", "").strip()),
+        "admin_password_env_locked": False,
         "anti429_enabled": bool(_runtime_state.get("anti429_enabled", False)),
         "anti429_target": _runtime_state.get("anti429_target", "system"),
         "force_no_stream": bool(_runtime_state.get("force_no_stream", False)),
@@ -536,8 +517,6 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
     if body.proxy_url is not None:
         _set_proxy_url(body.proxy_url.strip())
     if body.admin_password is not None:
-        if os.environ.get("ADMIN_PASSWORD", "").strip():
-            raise HTTPException(status_code=400, detail="Locked by ADMIN_PASSWORD environment variable")
         if len(body.admin_password.strip()) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
         _write_env_mapping({"ADMIN_PASSWORD": body.admin_password.strip()})

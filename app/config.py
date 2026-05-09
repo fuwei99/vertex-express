@@ -1,4 +1,7 @@
 import os
+from config_store import apply_config_json_to_env
+
+apply_config_json_to_env()
 
 # Default password if not set in environment
 DEFAULT_PASSWORD = "123456"
