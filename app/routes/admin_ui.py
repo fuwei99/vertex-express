@@ -29,7 +29,8 @@ _sessions: dict[str, float] = {}
 _runtime_state: dict[str, Any] = {
     "port_api": 8050,
     "debug": False,
-    "max_retries": 2,
+    "max_retries_429": app_config.MAX_RETRIES_429,
+    "retries_before_switch": app_config.RETRIES_BEFORE_SWITCH,
     "proxy_url": app_config.PROXY_URL or "",
     "subscription_url": "",
     "active_node_uri": "",
@@ -423,6 +424,8 @@ class SettingsBody(BaseModel):
     port_api: Optional[int] = None
     debug: Optional[bool] = None
     max_retries: Optional[int] = None
+    max_retries_429: Optional[int] = None
+    retries_before_switch: Optional[int] = None
     proxy_url: Optional[str] = None
     admin_password: Optional[str] = None
     anti429_enabled: Optional[bool] = None
@@ -490,7 +493,9 @@ async def get_settings(request: Request) -> dict[str, Any]:
     return {
         "port_api": _runtime_state.get("port_api", 8050),
         "debug": bool(_runtime_state.get("debug", False)),
-        "max_retries": int(_runtime_state.get("max_retries", 2)),
+        "max_retries": int(getattr(app_config, "MAX_RETRIES_429", 6)),
+        "max_retries_429": int(getattr(app_config, "MAX_RETRIES_429", 6)),
+        "retries_before_switch": int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)),
         "proxy_url": _runtime_state.get("proxy_url", ""),
         "env_proxy_url_override": env_proxy,
         "admin_password_env_locked": False,
@@ -513,7 +518,17 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _runtime_state["debug"] = bool(body.debug)
         notes.append("Debug mode change requires restart for full effect")
     if body.max_retries is not None:
-        _runtime_state["max_retries"] = int(body.max_retries)
+        body.max_retries_429 = body.max_retries
+    if body.max_retries_429 is not None:
+        value = max(0, int(body.max_retries_429))
+        _runtime_state["max_retries_429"] = value
+        app_config.MAX_RETRIES_429 = value
+        _write_env_mapping({"MAX_RETRIES_429": str(value)})
+    if body.retries_before_switch is not None:
+        value = max(1, int(body.retries_before_switch))
+        _runtime_state["retries_before_switch"] = value
+        app_config.RETRIES_BEFORE_SWITCH = value
+        _write_env_mapping({"RETRIES_BEFORE_SWITCH": str(value)})
     if body.proxy_url is not None:
         _set_proxy_url(body.proxy_url.strip())
     if body.admin_password is not None:

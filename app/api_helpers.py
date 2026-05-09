@@ -427,7 +427,8 @@ async def execute_gemini_call(
     actual_prompt_for_call = prompt_func(request_obj.messages)
     client_model_name_for_log = getattr(current_client, 'model_name', 'unknown_direct_client_object')
     print(f"INFO: execute_gemini_call for requested API model '{model_to_call}', using client object with internal name '{client_model_name_for_log}'. Original request model: '{request_obj.model}'")
-    max_429_retries = max(0, int(getattr(app_config, "MAX_RETRIES_429", 6)))
+    max_retries = max(0, int(getattr(app_config, "MAX_RETRIES_429", 6)))
+    retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
     
     if request_obj.stream:
         if app_config.FAKE_STREAMING_ENABLED:
@@ -442,6 +443,7 @@ async def execute_gemini_call(
             response_id_for_stream = f"chatcmpl-realstream-{int(time.time())}"
             async def _gemini_real_stream_generator_inner():
                 retry_count = 0
+                retries_on_current_node = 0
                 while True:
                     yielded_content = False
                     try:
@@ -459,13 +461,19 @@ async def execute_gemini_call(
                         should_switch_node = is_rate_limit_error(e_stream_call) or is_transient_proxy_error(e_stream_call)
                         if (
                             not yielded_content
-                            and retry_count < max_429_retries
+                            and retry_count < max_retries
                             and should_switch_node
-                            and await switch_next_node(f"retryable stream error while calling {model_to_call}: {type(e_stream_call).__name__}")
                         ):
                             retry_count += 1
-                            await asyncio.sleep(0.2)
-                            continue
+                            retries_on_current_node += 1
+                            if retries_on_current_node >= retries_before_switch:
+                                if await switch_next_node(f"retryable stream error while calling {model_to_call}: {type(e_stream_call).__name__}"):
+                                    retries_on_current_node = 0
+                                    await asyncio.sleep(0.2)
+                                    continue
+                            else:
+                                await asyncio.sleep(0.2)
+                                continue
 
                         err_msg_detail_stream = f"Streaming Error (Gemini API, model string: '{model_to_call}'): {type(e_stream_call).__name__} - {str(e_stream_call)}"
                         print(f"ERROR: {err_msg_detail_stream}")
@@ -480,6 +488,7 @@ async def execute_gemini_call(
             return StreamingResponse(_gemini_real_stream_generator_inner(), media_type="text/event-stream")
     else: # Non-streaming
         retry_count = 0
+        retries_on_current_node = 0
         while True:
             try:
                 response_obj_call = await generate_content(
@@ -492,11 +501,15 @@ async def execute_gemini_call(
             except Exception as e_call:
                 should_switch_node = is_rate_limit_error(e_call) or is_transient_proxy_error(e_call)
                 if (
-                    retry_count < max_429_retries
+                    retry_count < max_retries
                     and should_switch_node
-                    and await switch_next_node(f"retryable error while calling {model_to_call}: {type(e_call).__name__}")
                 ):
                     retry_count += 1
+                    retries_on_current_node += 1
+                    if retries_on_current_node >= retries_before_switch:
+                        if not await switch_next_node(f"retryable error while calling {model_to_call}: {type(e_call).__name__}"):
+                            raise
+                        retries_on_current_node = 0
                     await asyncio.sleep(0.2)
                     continue
                 raise
