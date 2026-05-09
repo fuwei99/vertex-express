@@ -558,14 +558,16 @@ def deobfuscate_text(text: str) -> str:
     text = text.replace("```", placeholder).replace("``", "").replace("♩", "").replace("`♡`", "").replace("♡", "").replace("` `", "").replace("`", "").replace(placeholder, "```")
     return text
 
-def _convert_image_to_markdown(image_data: bytes, mime_type: str) -> str:
+def _convert_image_to_markdown(image_data: Any, mime_type: str) -> str:
     """Convert image data to markdown format with base64 encoding."""
     try:
-        # Convert bytes to base64 string
-        b64_data = base64.b64encode(image_data).decode('utf-8')
-        # Create markdown image with data URL
+        if isinstance(image_data, str):
+            if image_data.startswith("data:"):
+                return f"![Image]({image_data})"
+            b64_data = image_data
+        else:
+            b64_data = base64.b64encode(image_data).decode('utf-8')
         data_url = f"data:{mime_type};base64,{b64_data}"
-        # Return markdown formatted image
         return f"![Image]({data_url})"
     except Exception as e:
         print(f"Error converting image to markdown: {e}")
