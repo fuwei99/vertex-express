@@ -3,11 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from pathlib import Path
-from config_store import CONFIG_FILE, apply_config_json_to_env
-
-if CONFIG_FILE.exists():
-    apply_config_json_to_env()
-    print(f"INFO: Loaded configuration from {CONFIG_FILE}")
+import os
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 if env_path.exists():
@@ -15,6 +11,13 @@ if env_path.exists():
     print(f"INFO: Loaded environment variables from {env_path}")
 else:
     print(f"WARNING: .env file not found at {env_path}")
+
+from config_store import CONFIG_FILE, apply_config_json_to_env
+
+if CONFIG_FILE.exists() or os.environ.get("CONFIG"):
+    apply_config_json_to_env()
+    if CONFIG_FILE.exists():
+        print(f"INFO: Loaded configuration from {CONFIG_FILE}")
 
 # Local module imports
 from auth import get_api_key # Potentially for root endpoint

@@ -30,6 +30,17 @@ _KEY_ALIASES = {
 
 def load_config_json() -> dict[str, Any]:
     if not CONFIG_FILE.exists():
+        # Try to restore from CONFIG environment variable
+        raw_config = os.environ.get("CONFIG")
+        if raw_config:
+            try:
+                data = json.loads(raw_config)
+                if isinstance(data, dict):
+                    CONFIG_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                    print(f"INFO: Generated {CONFIG_FILE} from CONFIG environment variable.")
+                    return data
+            except Exception as exc:
+                print(f"WARNING: Failed to parse CONFIG environment variable: {exc}")
         return {}
     try:
         data = json.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
