@@ -355,7 +355,7 @@ async def _fetch_subscription(url: str) -> list[dict[str, Any]]:
         try:
             headers = {"User-Agent": ua, "Accept": "*/*"}
             # 关键修复：强制设置 proxy=None，不走 10808，先直连获取订阅
-            async with httpx.AsyncClient(timeout=20, follow_redirects=True, proxy=None) as client:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True, proxy=None, trust_env=False) as client:
                 response = await client.get(url, headers=headers)
             response.raise_for_status()
             body = response.text
