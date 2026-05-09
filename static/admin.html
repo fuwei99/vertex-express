@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vertex Proxy 路 Control</title>
+<title>Vertex Proxy · Control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -132,34 +132,34 @@ label{display:block;font-size:11px;color:var(--tx2);text-transform:uppercase;let
 <body>
 <div id="loginView" class="login-wrap">
   <div class="login-card">
-    <div class="login-logo"><div class="ico">猬?/div><div><h1>Vertex Proxy</h1><p>Control Panel</p></div></div>
+    <div class="login-logo"><div class="ico">⬡</div><div><h1>Vertex Proxy</h1><p>Control Panel</p></div></div>
     <form id="loginForm">
-      <div class="field"><label for="pw">Admin password</label><input type="password" id="pw" autocomplete="current-password" autofocus required placeholder="鈥⑩€⑩€⑩€⑩€⑩€⑩€⑩€?></div>
+      <div class="field"><label for="pw">Admin password</label><input type="password" id="pw" autocomplete="current-password" autofocus required placeholder="••••••••"></div>
       <div class="err-msg" id="loginErr" style="display:none"></div>
-      <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:11px;">Enter 鈫?/button>
+      <button class="btn btn-primary" type="submit" style="width:100%;justify-content:center;padding:11px;">Enter →</button>
     </form>
     <div class="hint">Set <code>ADMIN_PASSWORD</code> in <code>.env</code> to control access to this panel.</div>
   </div>
 </div>
 <div class="app" id="appView">
   <div class="topbar">
-    <div class="brand"><div class="brand-ico">猬?/div><div class="brand-txt">Vertex Proxy <span>// control</span></div></div>
-    <div class="topbar-r"><div class="port-badge" id="portBadge">鈥?/div><button class="btn btn-sm" onclick="logout()">Sign out</button></div>
+    <div class="brand"><div class="brand-ico">⬡</div><div class="brand-txt">Vertex Proxy <span>// control</span></div></div>
+    <div class="topbar-r"><div class="port-badge" id="portBadge">—</div><button class="btn btn-sm" onclick="logout()">Sign out</button></div>
   </div>
   <div class="active-bar off" id="activeBar">
     <div class="ab-l"><span class="ab-dot"></span><span class="ab-lbl" id="activeLabel">No active node</span><span class="ab-name" id="activeName"></span><span class="ab-via" id="activeVia"></span><span class="ab-pool-badge" id="poolBadge" style="display:none"></span></div>
     <button class="btn btn-sm btn-danger" id="stopBtn" onclick="stopProxy()" style="display:none;">Stop &amp; direct</button>
   </div>
   <div class="tabs">
-    <button class="tab active" data-tab="server">鈿?Server</button>
-    <button class="tab" data-tab="keys">馃攽 Express Keys</button>
-    <button class="tab" data-tab="models">馃 Models</button>
-    <button class="tab" data-tab="proxy">馃摗 Subscription</button>
+    <button class="tab active" data-tab="server">⚙ Server</button>
+    <button class="tab" data-tab="keys">🔑 Express Keys</button>
+    <button class="tab" data-tab="models">🤖 Models</button>
+    <button class="tab" data-tab="proxy">📡 Subscription</button>
   </div>
   <div class="main">
     <div class="panel active" id="panel-server">
       <div class="section">
-        <div class="s-hd"><div><div class="s-title">馃殌 Server</div><div class="s-sub">Basic runtime parameters. Port changes require a service restart.</div></div></div>
+        <div class="s-hd"><div><div class="s-title">🚀 Server</div><div class="s-sub">Basic runtime parameters. Port changes require a service restart.</div></div></div>
         <div class="s-body">
           <div class="grid">
             <div class="field"><label>API port</label><input type="number" id="port_api" min="1" max="65535"><div class="fhint">Current adapter port.</div></div>
@@ -171,7 +171,7 @@ label{display:block;font-size:11px;color:var(--tx2);text-transform:uppercase;let
         </div>
       </div>
       <div class="section">
-        <div class="s-hd"><div><div class="s-title">馃洝锔?Request protection</div><div class="s-sub">Immediate runtime flags for traffic shaping and safer fallback behavior.</div></div></div>
+        <div class="s-hd"><div><div class="s-title">🛡️ Request protection</div><div class="s-sub">Immediate runtime flags for traffic shaping and safer fallback behavior.</div></div></div>
         <div class="s-body">
           <div style="display:flex;flex-direction:column;gap:10px">
             <div class="toggle-row"><div class="toggle-info"><div class="t-title">Proxy route enabled</div><div class="t-sub">Shows whether the current runtime has a configured manual or node-based proxy route.</div></div><label class="tog"><input type="checkbox" id="anti_tracking"><span class="tog-track"><span class="tog-thumb"></span></span></label></div>
@@ -183,31 +183,31 @@ label{display:block;font-size:11px;color:var(--tx2);text-transform:uppercase;let
         </div>
       </div>
       <div class="section">
-        <div class="s-hd"><div><div class="s-title">銆?Streaming</div><div class="s-sub">Control stream-related fallback behavior.</div></div></div>
+        <div class="s-hd"><div><div class="s-title">〜 Streaming</div><div class="s-sub">Control stream-related fallback behavior.</div></div></div>
         <div class="s-body"><div class="toggle-row"><div class="toggle-info"><div class="t-title">Force non-stream fallback</div><div class="t-sub">UI placeholder preserved for parity with the reference panel.</div></div><label class="tog"><input type="checkbox" id="force_no_stream"><span class="tog-track"><span class="tog-thumb"></span></span></label></div><div class="actions"><button class="btn btn-primary" onclick="saveStreaming()">Save</button></div></div>
       </div>
       <div class="section">
-        <div class="s-hd"><div><div class="s-title">馃敀 Admin password</div><div class="s-sub">Update the login password for this control panel.</div></div></div>
+        <div class="s-hd"><div><div class="s-title">🔒 Admin password</div><div class="s-sub">Update the login password for this control panel.</div></div></div>
         <div class="s-body"><div class="grid"><div class="field"><label>New password</label><input type="password" id="newPw" placeholder="At least 6 characters"></div><div style="display:flex;align-items:flex-end"><button class="btn" onclick="changePassword()">Update password</button></div></div><div id="pwLockedWarn" style="display:none;margin-top:12px;color:var(--yel);font-size:11px">Locked by environment variable <code>ADMIN_PASSWORD</code>.</div></div>
       </div>
     </div>
     <div class="panel" id="panel-keys">
       <div class="section">
-        <div class="s-hd"><div><div class="s-title">馃攽 Express Keys</div><div class="s-sub">Manage Vertex Express keys used by this adapter. Changes apply immediately.</div></div></div>
+        <div class="s-hd"><div><div class="s-title">🔑 Express Keys</div><div class="s-sub">Manage Vertex Express keys used by this adapter. Changes apply immediately.</div></div></div>
         <div class="s-body">
           <div class="grid"><div class="field"><label>Name</label><input type="text" id="key_name" placeholder="e.g. primary-us"></div><div class="field"><label>Express key</label><input type="text" id="key_value" placeholder="AQ...."></div><div class="field full"><label>Description (optional)</label><input type="text" id="key_desc"></div></div>
-          <div class="actions"><button class="btn btn-primary" onclick="addKey()">锛?Add key</button><span class="fhint">Same name will overwrite the previous record.</span></div>
+          <div class="actions"><button class="btn btn-primary" onclick="addKey()">＋ Add key</button><span class="fhint">Same name will overwrite the previous record.</span></div>
           <table class="table" style="margin-top:18px"><thead><tr><th>Name</th><th>Key</th><th>Description</th><th style="width:80px"></th></tr></thead><tbody id="keysTbody"></tbody></table>
         </div>
       </div>
     </div>
     <div class="panel" id="panel-models">
-      <div class="section"><div class="s-hd"><div><div class="s-title">馃 Models</div><div class="s-sub">Manage the local model registry used by /v1/models.</div></div></div><div class="s-body"><div class="grid"><div class="field"><label>Add model ID</label><input type="text" id="new_model_id" placeholder="gemini-3.1-flash-lite"></div><div style="display:flex;align-items:flex-end"><button class="btn btn-primary" onclick="addModel()">锛?Add</button></div></div><table class="table" style="margin-top:18px"><thead><tr><th>Model ID</th><th style="width:80px"></th></tr></thead><tbody id="modelsTbody"></tbody></table></div></div>
-      <div class="section"><div class="s-hd"><div><div class="s-title">馃攢 Alias map</div><div class="s-sub">Alias 鈫?actual model ID mapping.</div></div></div><div class="s-body"><div class="grid"><div class="field"><label>Alias</label><input type="text" id="alias_from" placeholder="gpt-4o"></div><div class="field"><label>Actual model ID</label><input type="text" id="alias_to" placeholder="gemini-3.1-pro-preview"></div></div><div class="actions"><button class="btn btn-primary" onclick="addAlias()">锛?Add alias</button></div><table class="table" style="margin-top:18px"><thead><tr><th>Alias</th><th></th><th>Model</th><th style="width:80px"></th></tr></thead><tbody id="aliasTbody"></tbody></table></div></div>
+      <div class="section"><div class="s-hd"><div><div class="s-title">🤖 Models</div><div class="s-sub">Manage the local model registry used by /v1/models.</div></div></div><div class="s-body"><div class="grid"><div class="field"><label>Add model ID</label><input type="text" id="new_model_id" placeholder="gemini-3.1-flash-lite"></div><div style="display:flex;align-items:flex-end"><button class="btn btn-primary" onclick="addModel()">＋ Add</button></div></div><table class="table" style="margin-top:18px"><thead><tr><th>Model ID</th><th style="width:80px"></th></tr></thead><tbody id="modelsTbody"></tbody></table></div></div>
+      <div class="section"><div class="s-hd"><div><div class="s-title">🔀 Alias map</div><div class="s-sub">Alias → actual model ID mapping.</div></div></div><div class="s-body"><div class="grid"><div class="field"><label>Alias</label><input type="text" id="alias_from" placeholder="gpt-4o"></div><div class="field"><label>Actual model ID</label><input type="text" id="alias_to" placeholder="gemini-3.1-pro-preview"></div></div><div class="actions"><button class="btn btn-primary" onclick="addAlias()">＋ Add alias</button></div><table class="table" style="margin-top:18px"><thead><tr><th>Alias</th><th></th><th>Model</th><th style="width:80px"></th></tr></thead><tbody id="aliasTbody"></tbody></table></div></div>
     </div>
     <div class="panel" id="panel-proxy">
       <div class="section">
-        <div class="s-hd"><div><div class="s-title">馃摗 Subscription.</div><div class="s-sub">Paste a subscription URL, fetch nodes, then click any node to enable it. This page is intentionally copied from the reference control panel.</div></div><span id="coreBadge" class="pill-warn" style="display:none">core not ready</span></div>
+        <div class="s-hd"><div><div class="s-title">📡 Subscription.</div><div class="s-sub">Paste a subscription URL, fetch nodes, then click any node to enable it. This page is intentionally copied from the reference control panel.</div></div><span id="coreBadge" class="pill-warn" style="display:none">core not ready</span></div>
         <div class="s-body">
           <div class="field"><label>Subscription URL</label><input type="text" id="sub_url" placeholder="https://example.com/subscribe?token=..."></div>
           <div class="actions"><button class="btn btn-primary" id="fetchBtn" onclick="fetchSubscription()">Fetch nodes</button><span id="subSummary" class="fhint"></span></div>
@@ -223,7 +223,7 @@ label{display:block;font-size:11px;color:var(--tx2);text-transform:uppercase;let
           <div class="node-list" id="nodeList"></div>
         </div>
       </div>
-      <div class="section"><div class="s-hd"><div><div class="s-title">馃敆 Manual proxy URL.</div><div class="s-sub">Not using a subscription? Enter an http/socks5 proxy directly. Leave empty for direct mode.</div></div></div><div class="s-body"><div class="field"><label>Proxy URL</label><input type="text" id="proxy_url" placeholder="http://host:port  /  socks5://host:port  /  empty = direct"><div class="fhint">Supports <code>http://</code> 路 <code>https://</code> 路 <code>socks5://</code></div><div id="envOverrideWarn" class="fwarn" style="display:none;margin-top:6px"></div></div><div class="actions"><button class="btn btn-primary" onclick="saveProxy()">Save proxy URL</button></div></div></div>
+      <div class="section"><div class="s-hd"><div><div class="s-title">🔗 Manual proxy URL.</div><div class="s-sub">Not using a subscription? Enter an http/socks5 proxy directly. Leave empty for direct mode.</div></div></div><div class="s-body"><div class="field"><label>Proxy URL</label><input type="text" id="proxy_url" placeholder="http://host:port  /  socks5://host:port  /  empty = direct"><div class="fhint">Supports <code>http://</code> · <code>https://</code> · <code>socks5://</code></div><div id="envOverrideWarn" class="fwarn" style="display:none;margin-top:6px"></div></div><div class="actions"><button class="btn btn-primary" onclick="saveProxy()">Save proxy URL</button></div></div></div>
     </div>
   </div>
 </div>
@@ -244,19 +244,19 @@ document.getElementById('loginForm').addEventListener('submit',async(e)=>{e.prev
 async function logout(){try{await api('POST','/api/admin/logout');}catch(e){}token='';localStorage.removeItem(TOKEN_KEY);showLogin();}
 document.querySelectorAll('.tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('panel-'+t.dataset.tab).classList.add('active');});});
 async function loadAll(){try{await loadSettings();await loadKeys();await loadModels();await loadSubscriptionUrl();await loadProxyStatus();await loadNodePool();}catch(e){}}
-async function loadSettings(){const s=await api('GET','/api/admin/settings');document.getElementById('port_api').value=s.port_api;document.getElementById('max_retries_429').value=s.max_retries_429;document.getElementById('retries_before_switch').value=s.retries_before_switch;document.getElementById('debug').checked=s.debug;document.getElementById('proxy_url').value=s.proxy_url||'';document.getElementById('portBadge').textContent='Port '+s.port_api;document.getElementById('anti429_enabled').checked=!!s.anti429_enabled;document.getElementById('anti429_target').value=s.anti429_target||'system';document.getElementById('force_no_stream').checked=!!s.force_no_stream;document.getElementById('anti_tracking').checked=!!s.anti_tracking;document.getElementById('drop_max_tokens').checked=!!s.drop_max_tokens;const warn=document.getElementById('envOverrideWarn');if(s.env_proxy_url_override){warn.textContent='鈿?Environment PROXY_URL='+s.env_proxy_url_override+' overrides panel configuration.';warn.style.display='block';}else{warn.style.display='none';}document.getElementById('pwLockedWarn').style.display=s.admin_password_env_locked?'block':'none';document.getElementById('newPw').disabled=!!s.admin_password_env_locked;}
-async function saveSettings(){const body={port_api:parseInt(document.getElementById('port_api').value,10),max_retries_429:parseInt(document.getElementById('max_retries_429').value,10),retries_before_switch:parseInt(document.getElementById('retries_before_switch').value,10),debug:document.getElementById('debug').checked};try{const r=await api('PUT','/api/admin/settings',body);showToast('Saved','ok');document.getElementById('saveTip').textContent=(r.notes&&r.notes.length)?r.notes.join(' 路 '):'';document.getElementById('portBadge').textContent='Port '+body.port_api;}catch(e){showToast(e.message,'err');}}
+async function loadSettings(){const s=await api('GET','/api/admin/settings');document.getElementById('port_api').value=s.port_api;document.getElementById('max_retries_429').value=s.max_retries_429;document.getElementById('retries_before_switch').value=s.retries_before_switch;document.getElementById('debug').checked=s.debug;document.getElementById('proxy_url').value=s.proxy_url||'';document.getElementById('portBadge').textContent='Port '+s.port_api;document.getElementById('anti429_enabled').checked=!!s.anti429_enabled;document.getElementById('anti429_target').value=s.anti429_target||'system';document.getElementById('force_no_stream').checked=!!s.force_no_stream;document.getElementById('anti_tracking').checked=!!s.anti_tracking;document.getElementById('drop_max_tokens').checked=!!s.drop_max_tokens;const warn=document.getElementById('envOverrideWarn');if(s.env_proxy_url_override){warn.textContent='⚠ Environment PROXY_URL='+s.env_proxy_url_override+' overrides panel configuration.';warn.style.display='block';}else{warn.style.display='none';}document.getElementById('pwLockedWarn').style.display=s.admin_password_env_locked?'block':'none';document.getElementById('newPw').disabled=!!s.admin_password_env_locked;}
+async function saveSettings(){const body={port_api:parseInt(document.getElementById('port_api').value,10),max_retries_429:parseInt(document.getElementById('max_retries_429').value,10),retries_before_switch:parseInt(document.getElementById('retries_before_switch').value,10),debug:document.getElementById('debug').checked};try{const r=await api('PUT','/api/admin/settings',body);showToast('Saved','ok');document.getElementById('saveTip').textContent=(r.notes&&r.notes.length)?r.notes.join(' · '):'';document.getElementById('portBadge').textContent='Port '+body.port_api;}catch(e){showToast(e.message,'err');}}
 async function saveProtection(){try{await api('PUT','/api/admin/settings',{anti_tracking:document.getElementById('anti_tracking').checked,drop_max_tokens:document.getElementById('drop_max_tokens').checked,anti429_enabled:document.getElementById('anti429_enabled').checked,anti429_target:document.getElementById('anti429_target').value});showToast('Saved','ok');}catch(e){showToast(e.message,'err');}}
 async function saveStreaming(){try{await api('PUT','/api/admin/settings',{force_no_stream:document.getElementById('force_no_stream').checked});showToast('Saved','ok');}catch(e){showToast(e.message,'err');}}
 async function changePassword(){const v=document.getElementById('newPw').value.trim();if(v.length<6){showToast('Password must be at least 6 characters','err');return;}try{await api('PUT','/api/admin/settings',{admin_password:v});document.getElementById('newPw').value='';showToast('Password updated','ok');}catch(e){showToast(e.message,'err');}}
-function maskKey(k){return(!k||k.length<8)?k:(k.slice(0,6)+'鈥?+k.slice(-4));}
+function maskKey(k){return(!k||k.length<8)?k:(k.slice(0,6)+'…'+k.slice(-4));}
 async function loadKeys(){const data=await api('GET','/api/admin/keys');const tbody=document.getElementById('keysTbody');tbody.innerHTML='';if(!data.keys.length){tbody.innerHTML='<tr><td colspan="4" class="empty">No Express keys yet.</td></tr>';return;}data.keys.forEach(k=>{const tr=document.createElement('tr');tr.innerHTML=`<td class="mono-cell">${esc(k.name)}</td><td class="mono-cell masked" title="Click to reveal" data-full="${esc(k.key)}" onclick="toggleReveal(this)">${esc(maskKey(k.key))}</td><td style="color:var(--tx2)">${esc(k.description||'')}</td><td><button class="btn btn-sm btn-danger" onclick="deleteKey('${esc(k.name)}')">Delete</button></td>`;tbody.appendChild(tr);});}
 function toggleReveal(el){const f=el.dataset.full;if(el.dataset.shown==='1'){el.textContent=maskKey(f);el.dataset.shown='0';}else{el.textContent=f;el.dataset.shown='1';}}
 async function addKey(){const name=document.getElementById('key_name').value.trim();const key=document.getElementById('key_value').value.trim();const description=document.getElementById('key_desc').value.trim();if(!name||!key){showToast('name / key required','err');return;}try{await api('POST','/api/admin/keys',{name,key,description});document.getElementById('key_name').value='';document.getElementById('key_value').value='';document.getElementById('key_desc').value='';await loadKeys();showToast('Added','ok');}catch(e){showToast(e.message,'err');}}
 async function deleteKey(name){if(!confirm('Delete key '+name+' ?'))return;try{await api('DELETE','/api/admin/keys/'+encodeURIComponent(name));await loadKeys();showToast('Deleted','ok');}catch(e){showToast(e.message,'err');}}
 let _modelsCache={models:[],alias_map:{}};
 async function loadModels(){const data=await api('GET','/api/admin/models');_modelsCache=data;renderModels(data.models,data.alias_map);}
-function renderModels(models,aliasMap){const tbody=document.getElementById('modelsTbody');tbody.innerHTML='';if(!models.length){tbody.innerHTML='<tr><td colspan="2" class="empty">No models yet</td></tr>';}else models.forEach(m=>{const tr=document.createElement('tr');tr.innerHTML=`<td class="mono-cell" style="color:var(--ac)">${esc(m)}</td><td><button class="btn btn-sm btn-danger" onclick="deleteModel('${esc(m)}')">Delete</button></td>`;tbody.appendChild(tr);});const atbody=document.getElementById('aliasTbody');atbody.innerHTML='';const entries=Object.entries(aliasMap||{});if(!entries.length){atbody.innerHTML='<tr><td colspan="4" class="empty">No alias map yet</td></tr>';}else entries.forEach(([from,to])=>{const tr=document.createElement('tr');tr.innerHTML=`<td class="mono-cell" style="color:var(--ac)">${esc(from)}</td><td style="color:var(--tx3);font-size:16px">鈫?/td><td class="mono-cell">${esc(to)}</td><td><button class="btn btn-sm btn-danger" onclick="deleteAlias('${esc(from)}')">Delete</button></td>`;atbody.appendChild(tr);});}
+function renderModels(models,aliasMap){const tbody=document.getElementById('modelsTbody');tbody.innerHTML='';if(!models.length){tbody.innerHTML='<tr><td colspan="2" class="empty">No models yet</td></tr>';}else models.forEach(m=>{const tr=document.createElement('tr');tr.innerHTML=`<td class="mono-cell" style="color:var(--ac)">${esc(m)}</td><td><button class="btn btn-sm btn-danger" onclick="deleteModel('${esc(m)}')">Delete</button></td>`;tbody.appendChild(tr);});const atbody=document.getElementById('aliasTbody');atbody.innerHTML='';const entries=Object.entries(aliasMap||{});if(!entries.length){atbody.innerHTML='<tr><td colspan="4" class="empty">No alias map yet</td></tr>';}else entries.forEach(([from,to])=>{const tr=document.createElement('tr');tr.innerHTML=`<td class="mono-cell" style="color:var(--ac)">${esc(from)}</td><td style="color:var(--tx3);font-size:16px">→</td><td class="mono-cell">${esc(to)}</td><td><button class="btn btn-sm btn-danger" onclick="deleteAlias('${esc(from)}')">Delete</button></td>`;atbody.appendChild(tr);});}
 async function addModel(){const id=document.getElementById('new_model_id').value.trim();if(!id){showToast('Enter a model ID','err');return;}const models=[...new Set([..._modelsCache.models,id])];try{await api('PUT','/api/admin/models',{models});document.getElementById('new_model_id').value='';await loadModels();showToast('Model added','ok');}catch(e){showToast(e.message,'err');}}
 async function deleteModel(id){if(!confirm('Delete model '+id+' ?'))return;const models=_modelsCache.models.filter(m=>m!==id);try{await api('PUT','/api/admin/models',{models});await loadModels();showToast('Deleted','ok');}catch(e){showToast(e.message,'err');}}
 async function addAlias(){const from=document.getElementById('alias_from').value.trim();const to=document.getElementById('alias_to').value.trim();if(!from||!to){showToast('Alias and target are required','err');return;}const alias_map={..._modelsCache.alias_map,[from]:to};try{await api('PUT','/api/admin/models',{alias_map});document.getElementById('alias_from').value='';document.getElementById('alias_to').value='';await loadModels();showToast('Alias added','ok');}catch(e){showToast(e.message,'err');}}
@@ -270,7 +270,7 @@ function updatePoolUI(){
     }else{
         badge.style.display='none';
     }
-    // 鍏抽敭淇锛氫笉鍐嶆牴鎹?inPool 寮哄埗鍕鹃€?checkbox
+    // 关键修正：不再根据 inPool 强制勾选 checkbox
     refreshPoolButtons();
     refreshNodeHighlight();
 }
@@ -335,7 +335,8 @@ function onNodeCheck(cb){const uri=cb.dataset.uri;if(cb.checked)_poolUris.add(ur
 async function loadSubscriptionUrl(){try{const r=await api('GET','/api/admin/subscription');if(r.url){document.getElementById('sub_url').value=r.url;fetchSubscription({silent:true}).catch(()=>{});}}catch(e){}}
 async function fetchSubscription(opts={}){const url=document.getElementById('sub_url').value.trim();if(!url){if(!opts.silent)showToast('Enter a subscription URL','err');return;}const btn=document.getElementById('fetchBtn');const listEl=document.getElementById('nodeList');btn.disabled=true;btn.textContent='Fetching...';listEl.innerHTML='';document.getElementById('subSummary').textContent='';try{const data=await api('POST','/api/admin/subscribe',{url});document.getElementById('subSummary').textContent=`Total ${data.total} nodes`;_allNodes=data.nodes||[];if(!_allNodes.length){listEl.innerHTML='<div class="empty">No nodes parsed</div>';return;}document.getElementById('poolBar').style.display='flex';renderNodes(_allNodes);_poolUris.clear();_nodePool.forEach(p=>_poolUris.add(p.raw_uri));updatePoolUI();}catch(e){if(!opts.silent)showToast(e.message,'err');listEl.innerHTML='<div class="empty">'+esc(e.message)+'</div>';}finally{btn.disabled=false;btn.textContent='Fetch nodes';}}
 const _tmap={A:'VLESS',B:'VMess',C:'Trojan',D:'SS',E:'SSR',F:'Hysteria2',H:'AnyTLS',I:'TUIC',J:'Hy1',http:'HTTP',https:'HTTPS',socks5:'SOCKS5',socks:'SOCKS'};
-function renderNodes(nodes){const listEl=document.getElementById('nodeList');listEl.innerHTML='';nodes.forEach((n)=>{const isActive=currentActiveUri&&currentActiveUri===n.raw_uri;const inPool=_nodePool.some(p=>p.raw_uri===n.raw_uri);const checked=_poolUris.has(n.raw_uri); // 浠呮牴鎹墜鍔ㄥ嬀閫夌姸鎬?    const poolIdx=_nodePool.findIndex(p=>p.raw_uri===n.raw_uri);
+function renderNodes(nodes){const listEl=document.getElementById('nodeList');listEl.innerHTML='';nodes.forEach((n)=>{const isActive=currentActiveUri&&currentActiveUri===n.raw_uri;const inPool=_nodePool.some(p=>p.raw_uri===n.raw_uri);const checked=_poolUris.has(n.raw_uri); // 仅根据手动勾选状态
+    const poolIdx=_nodePool.findIndex(p=>p.raw_uri===n.raw_uri);
     const displayType=_tmap[n.type]||n.type;
     const div=document.createElement('div');
     div.className='node'+(isActive?' active':'')+(inPool?' in-pool':'');
@@ -372,11 +373,10 @@ async function removeFromPool(uri){
 }
 function refreshNodeHighlight(){if(!_allNodes.length)return;renderNodes(_allNodes);}
 async function useNode(btn){const uri=btn.dataset.uri;const name=btn.dataset.name||'';btn.disabled=true;btn.textContent='Applying...';try{const r=await api('POST','/api/admin/use-node',{raw_uri:uri,name});showToast('Activated: '+(name||r.proxy_url),'ok');document.getElementById('proxy_url').value=r.proxy_url;currentActiveUri=uri;await loadProxyStatus();refreshNodeHighlight();}catch(e){showToast(e.message,'err');btn.disabled=false;btn.textContent='Use';}}
-async function loadProxyStatus(){try{const s=await api('GET','/api/admin/proxy-status');currentActiveUri=s.active_node_uri||'';const bar=document.getElementById('activeBar'),lbl=document.getElementById('activeLabel'),nm=document.getElementById('activeName'),via=document.getElementById('activeVia'),stopBtn=document.getElementById('stopBtn'),coreBadge=document.getElementById('coreBadge');coreBadge.style.display=s.binary_available?'none':'inline-block';if(s.active_node_uri&&(s.running||s.configured_proxy_url)){bar.classList.remove('off');lbl.textContent='Active node';nm.textContent=s.active_node_name||s.active_node_uri.slice(0,60);via.textContent=s.running?`路 via core ${s.proxy_url}`:`路 direct ${s.configured_proxy_url}`;stopBtn.style.display='inline-block';}else if(s.configured_proxy_url){bar.classList.remove('off');lbl.textContent='Manual proxy';nm.textContent=s.configured_proxy_url;via.textContent='';stopBtn.style.display='inline-block';}else{bar.classList.add('off');lbl.textContent='No active node 路 direct connection';nm.textContent='';via.textContent='';stopBtn.style.display='none';}const badge=document.getElementById('poolBadge');if(_nodePool.length>1&&currentActiveUri){const idx=_nodePool.findIndex(p=>p.raw_uri===currentActiveUri);badge.textContent=idx>=0?`pool ${idx+1}/${_nodePool.length}`:`pool ${_nodePool.length}`;badge.style.display='inline-block';}else{badge.style.display='none';}}catch(e){}}
+async function loadProxyStatus(){try{const s=await api('GET','/api/admin/proxy-status');currentActiveUri=s.active_node_uri||'';const bar=document.getElementById('activeBar'),lbl=document.getElementById('activeLabel'),nm=document.getElementById('activeName'),via=document.getElementById('activeVia'),stopBtn=document.getElementById('stopBtn'),coreBadge=document.getElementById('coreBadge');coreBadge.style.display=s.binary_available?'none':'inline-block';if(s.active_node_uri&&(s.running||s.configured_proxy_url)){bar.classList.remove('off');lbl.textContent='Active node';nm.textContent=s.active_node_name||s.active_node_uri.slice(0,60);via.textContent=s.running?`· via core ${s.proxy_url}`:`· direct ${s.configured_proxy_url}`;stopBtn.style.display='inline-block';}else if(s.configured_proxy_url){bar.classList.remove('off');lbl.textContent='Manual proxy';nm.textContent=s.configured_proxy_url;via.textContent='';stopBtn.style.display='inline-block';}else{bar.classList.add('off');lbl.textContent='No active node · direct connection';nm.textContent='';via.textContent='';stopBtn.style.display='none';}const badge=document.getElementById('poolBadge');if(_nodePool.length>1&&currentActiveUri){const idx=_nodePool.findIndex(p=>p.raw_uri===currentActiveUri);badge.textContent=idx>=0?`pool ${idx+1}/${_nodePool.length}`:`pool ${_nodePool.length}`;badge.style.display='inline-block';}else{badge.style.display='none';}}catch(e){}}
 async function saveProxy(){try{await api('POST','/api/admin/stop-proxy');await api('PUT','/api/admin/settings',{proxy_url:document.getElementById('proxy_url').value});showToast('Proxy saved','ok');await loadProxyStatus();refreshNodeHighlight();}catch(e){showToast(e.message,'err');}}
 async function stopProxy(){if(!confirm('Stop the current proxy and return to direct mode?'))return;try{await api('POST','/api/admin/stop-proxy');currentActiveUri='';document.getElementById('proxy_url').value='';showToast('Proxy stopped','ok');await loadProxyStatus();refreshNodeHighlight();}catch(e){showToast(e.message,'err');}}
 (async()=>{if(token){try{await api('GET','/api/admin/settings');showApp();return;}catch(e){}}showLogin();})();
 </script>
 </body>
 </html>
-
