@@ -5,7 +5,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 # Google specific imports
 from google.genai import types
-from google import genai
 
 # Local module imports
 from models import OpenAIRequest
@@ -23,6 +22,8 @@ from api_helpers import (
 )
 from openai_handler import OpenAIDirectHandler
 from project_id_discovery import discover_project_id
+from credentials_manager import _refresh_auth
+from gemini_rest_client import GeminiRestClientContext
 
 router = APIRouter()
 
@@ -136,17 +137,20 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
                         # Check if model contains "gemini-2.5-pro" or "gemini-2.5-flash" for direct URL approach
                         if "gemini-2.5-pro" in base_model_name or "gemini-2.5-flash" in base_model_name:
                             project_id = await discover_project_id(key_val)
-                            base_url = f"https://aiplatform.googleapis.com/v1/projects/{project_id}/locations/global"
-                            client_to_use = genai.Client(
-                                vertexai=True,
+                            client_to_use = GeminiRestClientContext(
+                                project_id=project_id,
                                 api_key=key_val,
-                                http_options=types.HttpOptions(base_url=base_url)
+                                location="global",
                             )
-                            client_to_use._api_client._http_options.api_version = None
                             print(f"INFO: Attempt {attempt+1}/{total_keys} - Using Vertex Express Mode with custom base URL for model {request.model} (base: {base_model_name}) with API key (original index: {original_idx}).")
                         else:
-                            client_to_use = genai.Client(vertexai=True, api_key=key_val)
-                            print(f"INFO: Attempt {attempt+1}/{total_keys} - Using Vertex Express Mode SDK for model {request.model} (base: {base_model_name}) with API key (original index: {original_idx}).")
+                            project_id = await discover_project_id(key_val)
+                            client_to_use = GeminiRestClientContext(
+                                project_id=project_id,
+                                api_key=key_val,
+                                location="global",
+                            )
+                            print(f"INFO: Attempt {attempt+1}/{total_keys} - Using Vertex Express Mode REST for model {request.model} (base: {base_model_name}) with API key (original index: {original_idx}).")
                         break # Successfully initialized client
                     except Exception as e:
                         print(f"WARNING: Attempt {attempt+1}/{total_keys} - Vertex Express Mode client init failed for API key (original index: {original_idx}) for model {request.model}: {e}. Trying next key.")
@@ -168,7 +172,14 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
             
             if rotated_credentials and rotated_project_id:
                 try:
-                    client_to_use = genai.Client(vertexai=True, credentials=rotated_credentials, project=rotated_project_id, location="global")
+                    gcp_token = _refresh_auth(rotated_credentials)
+                    if not gcp_token:
+                        raise Exception(f"Failed to obtain valid GCP token for project {rotated_project_id}")
+                    client_to_use = GeminiRestClientContext(
+                        project_id=rotated_project_id,
+                        bearer_token=gcp_token,
+                        location="global",
+                    )
                     print(f"INFO: Using SA credential for Gemini model {request.model} (project: {rotated_project_id})")
                 except Exception as e:
                     client_to_use = None # Ensure it's None on failure

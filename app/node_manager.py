@@ -66,3 +66,24 @@ def is_rate_limit_error(exc_or_text: Any) -> bool:
     text = str(exc_or_text)
     upper = text.upper()
     return "429" in text or "RESOURCE_EXHAUSTED" in upper or "TOO MANY REQUESTS" in upper
+
+
+def is_transient_proxy_error(exc_or_text: Any) -> bool:
+    text = str(exc_or_text)
+    upper = text.upper()
+    markers = [
+        "TLS CONNECT ERROR",
+        "OPENSSL_INTERNAL",
+        "INVALID LIBRARY",
+        "CONNECTIONRESETERROR",
+        "CONNECTION RESET",
+        "CLIENTOSERROR",
+        "WINERROR 64",
+        "FAILED TO PERFORM",
+        "COULD NOT CONNECT",
+        "PROXY",
+        "TIMED OUT",
+        "TIMEOUT",
+        "HTTP/2 STREAM",
+    ]
+    return any(marker in upper for marker in markers)

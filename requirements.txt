@@ -10,3 +10,4 @@ google-auth-oauthlib
 aiohttp
 PyYAML
 python-dotenv
+curl_cffi

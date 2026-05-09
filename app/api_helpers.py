@@ -19,7 +19,8 @@ from message_processing import (
 )
 import config as app_config
 from config import VERTEX_REASONING_TAG
-from node_manager import is_rate_limit_error, switch_next_node
+from node_manager import is_rate_limit_error, is_transient_proxy_error, switch_next_node
+from gemini_rest_client import generate_content, stream_generate_content
 
 class StreamingReasoningProcessor:
     def __init__(self, tag_name: str = VERTEX_REASONING_TAG):
@@ -296,10 +297,11 @@ async def gemini_fake_stream_generator(
     print(f"FAKE STREAMING (Gemini): Prep for '{request_obj.model}' (API model string: '{model_for_api_call}', client obj: '{model_name_for_log}')")
     
     api_call_task = asyncio.create_task(
-        gemini_client_instance.aio.models.generate_content(
-            model=model_for_api_call, 
-            contents=prompt_for_api_call, 
-            config=gen_config_dict_for_api_call # Pass the dictionary directly
+        generate_content(
+            gemini_client_instance,
+            model_for_api_call,
+            prompt_for_api_call,
+            gen_config_dict_for_api_call,
         )
     )
 
@@ -443,22 +445,23 @@ async def execute_gemini_call(
                 while True:
                     yielded_content = False
                     try:
-                        stream_gen_obj = await current_client.aio.models.generate_content_stream(
-                            model=model_to_call, 
-                            contents=actual_prompt_for_call,
-                            config=gen_config_dict # Pass the dictionary directly
-                        )
-                        async for chunk_item_call in stream_gen_obj:
+                        async for chunk_item_call in stream_generate_content(
+                            current_client,
+                            model_to_call,
+                            actual_prompt_for_call,
+                            gen_config_dict,
+                        ):
                             yielded_content = True
                             yield convert_chunk_to_openai(chunk_item_call, request_obj.model, response_id_for_stream, 0)
                         yield "data: [DONE]\n\n"
                         return
                     except Exception as e_stream_call:
+                        should_switch_node = is_rate_limit_error(e_stream_call) or is_transient_proxy_error(e_stream_call)
                         if (
                             not yielded_content
                             and retry_count < max_429_retries
-                            and is_rate_limit_error(e_stream_call)
-                            and await switch_next_node(f"429 while streaming {model_to_call}")
+                            and should_switch_node
+                            and await switch_next_node(f"retryable stream error while calling {model_to_call}: {type(e_stream_call).__name__}")
                         ):
                             retry_count += 1
                             await asyncio.sleep(0.2)
@@ -472,23 +475,26 @@ async def execute_gemini_call(
                         if not is_auto_attempt: 
                             yield f"data: {j_err}\n\n"
                             yield "data: [DONE]\n\n"
+                            return
                         raise e_stream_call
             return StreamingResponse(_gemini_real_stream_generator_inner(), media_type="text/event-stream")
     else: # Non-streaming
         retry_count = 0
         while True:
             try:
-                response_obj_call = await current_client.aio.models.generate_content(
-                    model=model_to_call, 
-                    contents=actual_prompt_for_call,
-                    config=gen_config_dict # Pass the dictionary directly
+                response_obj_call = await generate_content(
+                    current_client,
+                    model_to_call,
+                    actual_prompt_for_call,
+                    gen_config_dict,
                 )
                 break
             except Exception as e_call:
+                should_switch_node = is_rate_limit_error(e_call) or is_transient_proxy_error(e_call)
                 if (
                     retry_count < max_429_retries
-                    and is_rate_limit_error(e_call)
-                    and await switch_next_node(f"429 while calling {model_to_call}")
+                    and should_switch_node
+                    and await switch_next_node(f"retryable error while calling {model_to_call}: {type(e_call).__name__}")
                 ):
                     retry_count += 1
                     await asyncio.sleep(0.2)
