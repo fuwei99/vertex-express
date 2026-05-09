@@ -144,6 +144,16 @@ def _build_url(ctx: GeminiRestClientContext, model: str, action: str, stream: bo
     return url
 
 
+def _build_predict_url(ctx: GeminiRestClientContext, model: str) -> str:
+    url = (
+        "https://aiplatform.googleapis.com/v1/"
+        f"projects/{ctx.project_id}/locations/{ctx.location}/publishers/google/models/{model}:predict"
+    )
+    if ctx.api_key:
+        url += f"?key={ctx.api_key}"
+    return url
+
+
 def _headers(ctx: GeminiRestClientContext) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
@@ -201,6 +211,31 @@ def convert_gemini_images_to_markdown(value: Any) -> Any:
         key: convert_gemini_images_to_markdown(item)
         for key, item in value.items()
     }
+
+
+def convert_imagen_predictions_to_markdown(value: Any) -> Any:
+    converted = convert_gemini_images_to_markdown(value)
+    if not isinstance(converted, dict) or not isinstance(converted.get("predictions"), list):
+        return converted
+
+    predictions = []
+    for prediction in converted["predictions"]:
+        if not isinstance(prediction, dict):
+            predictions.append(prediction)
+            continue
+
+        item = dict(prediction)
+        b64_data = item.get("bytesBase64Encoded")
+        mime_type = item.get("mimeType") or "image/png"
+        gcs_uri = item.get("gcsUri")
+        if isinstance(b64_data, str) and b64_data and isinstance(mime_type, str) and mime_type.startswith("image/"):
+            item["markdown"] = f"![Image](data:{mime_type};base64,{b64_data})"
+        elif isinstance(gcs_uri, str) and gcs_uri:
+            item["markdown"] = f"![Image]({gcs_uri})"
+        predictions.append(item)
+
+    converted["predictions"] = predictions
+    return converted
 
 
 async def _raise_for_status_with_body(response: Any) -> None:
@@ -264,6 +299,39 @@ async def generate_content_raw(
                 print(f"WARNING: Retryable raw Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
                 if retries_on_current_node >= retries_before_switch:
                     if not await switch_next_node(f"retryable raw generate error while calling {model}: {type(exc).__name__}"):
+                        raise
+                    retries_on_current_node = 0
+                await asyncio.sleep(0.2)
+                continue
+            raise
+
+
+async def predict_raw(
+    ctx: GeminiRestClientContext,
+    model: str,
+    payload: dict[str, Any],
+) -> Any:
+    max_retries = max(0, int(getattr(app_config, "MAX_RETRIES_429", 6)))
+    retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
+    retry_count = 0
+    retries_on_current_node = 0
+
+    while True:
+        url = _build_predict_url(ctx, model)
+        print(f"INFO: Executing raw Vertex predict call (curl_cffi) to '{model}'. Proxy: {_proxy_log_value()}")
+        try:
+            async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
+                response = await session.post(url, json=payload, headers=_headers(ctx), timeout=300)
+                await _raise_for_status_with_body(response)
+                return convert_imagen_predictions_to_markdown(response.json())
+        except Exception as exc:
+            should_switch_node = is_rate_limit_error(exc) or is_transient_proxy_error(exc)
+            if retry_count < max_retries and should_switch_node:
+                retry_count += 1
+                retries_on_current_node += 1
+                print(f"WARNING: Retryable raw Vertex predict error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
+                if retries_on_current_node >= retries_before_switch:
+                    if not await switch_next_node(f"retryable raw predict error while calling {model}: {type(exc).__name__}"):
                         raise
                     retries_on_current_node = 0
                 await asyncio.sleep(0.2)

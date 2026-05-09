@@ -1,0 +1,170 @@
+{
+  "models": [
+    {
+      "id": "gemini-3.1-pro-preview-low",
+      "baseModelId": "gemini-3.1-pro-preview",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "LOW"
+        }
+      }
+    },
+    {
+      "id": "gemini-3.1-pro-preview-high",
+      "baseModelId": "gemini-3.1-pro-preview",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "id": "gemini-3.1-flash-lite-nothinking",
+      "baseModelId": "gemini-3.1-flash-lite",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "id": "gemini-3-flash-preview-nothinking",
+      "baseModelId": "gemini-3-flash-preview",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "MINIMAL"
+        }
+      }
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "baseModelId": "gemini-3-flash-preview",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "MEDIUM"
+        }
+      }
+    },
+    {
+      "id": "gemini-3-flash-preview-high",
+      "baseModelId": "gemini-3-flash-preview",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "id": "gemini-2.5-pro-nothinking",
+      "baseModelId": "gemini-2.5-pro",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingBudget": 128
+        }
+      }
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "baseModelId": "gemini-2.5-pro"
+    },
+    {
+      "id": "gemini-3-pro-image-preview",
+      "baseModelId": "gemini-3-pro-image-preview",
+      "generationConfig": {
+        "responseModalities": [
+          "TEXT",
+          "IMAGE"
+        ]
+      }
+    },
+    {
+      "id": "gemini-3-pro-image-preview-2K",
+      "baseModelId": "gemini-3-pro-image-preview",
+      "generationConfig": {
+        "responseModalities": [
+          "TEXT",
+          "IMAGE"
+        ],
+        "imageConfig": {
+          "imageSize": "2K"
+        }
+      }
+    },
+    {
+      "id": "gemini-3-pro-image-preview-4K",
+      "baseModelId": "gemini-3-pro-image-preview",
+      "generationConfig": {
+        "responseModalities": [
+          "TEXT",
+          "IMAGE"
+        ],
+        "imageConfig": {
+          "imageSize": "4K"
+        }
+      }
+    },
+    {
+      "id": "gemini-3.1-flash-image-preview",
+      "baseModelId": "gemini-3.1-flash-image-preview",
+      "generationConfig": {
+        "responseModalities": [
+          "TEXT",
+          "IMAGE"
+        ],
+        "thinkingConfig": {
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "id": "gemini-3.1-flash-image-preview-2K",
+      "baseModelId": "gemini-3.1-flash-image-preview",
+      "generationConfig": {
+        "responseModalities": [
+          "TEXT",
+          "IMAGE"
+        ],
+        "imageConfig": {
+          "imageSize": "2K"
+        },
+        "thinkingConfig": {
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "id": "gemini-3.1-flash-image-preview-4K",
+      "baseModelId": "gemini-3.1-flash-image-preview",
+      "generationConfig": {
+        "responseModalities": [
+          "TEXT",
+          "IMAGE"
+        ],
+        "imageConfig": {
+          "imageSize": "4K"
+        },
+        "thinkingConfig": {
+          "thinkingLevel": "HIGH"
+        }
+      }
+    },
+    {
+      "id": "imagen-4.0-ultra-generate-001",
+      "baseModelId": "imagen-4.0-ultra-generate-001",
+      "api": "predict",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "predict"
+      ]
+    },
+    {
+      "id": "imagen-4.0-generate-001",
+      "baseModelId": "imagen-4.0-generate-001",
+      "api": "predict",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "predict"
+      ]
+    }
+  ]
+}

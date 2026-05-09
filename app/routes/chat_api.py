@@ -26,7 +26,8 @@ from openai_handler import OpenAIDirectHandler
 from project_id_discovery import discover_project_id
 from credentials_manager import _refresh_auth
 from gemini_rest_client import GeminiRestClientContext
-from gemini_rest_client import generate_content_raw, stream_generate_content_raw
+from gemini_rest_client import generate_content_raw, predict_raw, stream_generate_content_raw
+from gemini_native_models import apply_native_model_config, get_gemini_native_model
 
 router = APIRouter()
 
@@ -94,15 +95,92 @@ def _merge_generation_config(payload: dict, updates: dict) -> dict:
     return updated_payload
 
 
+def _extract_prompt_from_gemini_payload(payload: dict) -> str:
+    prompt_parts = []
+    for content in payload.get("contents") or []:
+        if not isinstance(content, dict):
+            continue
+        for part in content.get("parts") or []:
+            if isinstance(part, dict) and isinstance(part.get("text"), str):
+                prompt_parts.append(part["text"])
+    return "\n".join(part.strip() for part in prompt_parts if part.strip()).strip()
+
+
+def _gemini_payload_to_imagen_predict_payload(payload: dict) -> dict:
+    if isinstance(payload.get("instances"), list):
+        return payload
+
+    prompt = payload.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        prompt = _extract_prompt_from_gemini_payload(payload)
+
+    parameters = dict(payload.get("parameters") or {})
+    generation_config = dict(payload.get("generationConfig") or {})
+    image_config = dict(generation_config.get("imageConfig") or {})
+
+    candidate_count = generation_config.get("candidateCount")
+    if candidate_count is not None and "sampleCount" not in parameters:
+        parameters["sampleCount"] = candidate_count
+
+    image_size = image_config.get("imageSize")
+    if image_size is not None and "sampleImageSize" not in parameters:
+        parameters["sampleImageSize"] = image_size
+
+    aspect_ratio = image_config.get("aspectRatio")
+    if aspect_ratio is not None and "aspectRatio" not in parameters:
+        parameters["aspectRatio"] = aspect_ratio
+
+    output_options = generation_config.get("outputOptions")
+    if isinstance(output_options, dict) and "outputOptions" not in parameters:
+        parameters["outputOptions"] = output_options
+
+    return {
+        "instances": [{"prompt": prompt}],
+        "parameters": parameters,
+    }
+
+
+def _imagen_response_to_generate_content_response(response: dict) -> dict:
+    parts = []
+    for prediction in response.get("predictions") or []:
+        if not isinstance(prediction, dict):
+            continue
+        markdown = prediction.get("markdown")
+        if isinstance(markdown, str) and markdown:
+            parts.append({"text": markdown})
+        elif isinstance(prediction.get("raiFilteredReason"), str):
+            parts.append({"text": f"[Image filtered: {prediction['raiFilteredReason']}]"})
+
+    return {
+        "candidates": [
+            {
+                "content": {
+                    "role": "model",
+                    "parts": parts,
+                },
+                "finishReason": "STOP",
+            }
+        ]
+    }
+
+
+async def _single_event_stream(payload: dict):
+    yield f"data: {json.dumps(payload)}\n\n"
+
+
 def _apply_gemini_native_model_options(model: str, payload: dict) -> tuple[str, dict]:
+    configured_model = get_gemini_native_model(model)
+    if configured_model:
+        return apply_native_model_config(model, payload)
+
     model_to_call = model
     payload_to_call = dict(payload)
 
     is_grounded_search = model_to_call.endswith("-search")
     is_nothinking_model = model_to_call.endswith("-nothinking")
     is_max_thinking_model = model_to_call.endswith("-max")
-    is_2k_image_model = model_to_call.endswith("-2k")
-    is_4k_image_model = model_to_call.endswith("-4k")
+    is_2k_image_model = model_to_call.lower().endswith("-2k")
+    is_4k_image_model = model_to_call.lower().endswith("-4k")
 
     if is_grounded_search:
         model_to_call = model_to_call[:-len("-search")]
@@ -111,9 +189,9 @@ def _apply_gemini_native_model_options(model: str, payload: dict) -> tuple[str, 
     elif is_max_thinking_model:
         model_to_call = model_to_call[:-len("-max")]
     elif is_2k_image_model:
-        model_to_call = model_to_call[:-len("-2k")]
+        model_to_call = model_to_call[:-len("-2K")]
     elif is_4k_image_model:
-        model_to_call = model_to_call[:-len("-4k")]
+        model_to_call = model_to_call[:-len("-4K")]
 
     if is_grounded_search:
         tools = list(payload_to_call.get("tools") or [])
@@ -125,7 +203,7 @@ def _apply_gemini_native_model_options(model: str, payload: dict) -> tuple[str, 
             payload_to_call,
             {
                 "responseModalities": ["TEXT", "IMAGE"],
-                "imageConfig": {"imageSize": "2k" if is_2k_image_model else "4k"},
+                "imageConfig": {"imageSize": "2K" if is_2k_image_model else "4K"},
             },
         )
 
@@ -223,8 +301,12 @@ async def gemini_generate_content(
         if not isinstance(payload, dict):
             return JSONResponse(status_code=400, content={"error": {"message": "Gemini request body must be a JSON object."}})
         payload = _convert_request_markdown_images_to_inline_data(payload)
+        model_config = get_gemini_native_model(model)
         model, payload = _apply_gemini_native_model_options(model, payload)
         client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
+        if model_config and model_config.get("api") == "predict":
+            response = await predict_raw(client_to_use, model_to_call, _gemini_payload_to_imagen_predict_payload(payload))
+            return JSONResponse(content=_imagen_response_to_generate_content_response(response))
         response = await generate_content_raw(client_to_use, model_to_call, payload)
         return JSONResponse(content=response)
     except Exception as e:
@@ -246,14 +328,43 @@ async def gemini_stream_generate_content(
         if not isinstance(payload, dict):
             return JSONResponse(status_code=400, content={"error": {"message": "Gemini request body must be a JSON object."}})
         payload = _convert_request_markdown_images_to_inline_data(payload)
+        model_config = get_gemini_native_model(model)
         model, payload = _apply_gemini_native_model_options(model, payload)
         client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
+        if model_config and model_config.get("api") == "predict":
+            response = await predict_raw(client_to_use, model_to_call, _gemini_payload_to_imagen_predict_payload(payload))
+            return StreamingResponse(
+                _single_event_stream(_imagen_response_to_generate_content_response(response)),
+                media_type="text/event-stream",
+            )
         return StreamingResponse(
             stream_generate_content_raw(client_to_use, model_to_call, payload),
             media_type="text/event-stream",
         )
     except Exception as e:
         error_msg = f"Unexpected error in gemini_stream_generate_content endpoint: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": {"message": error_msg}})
+
+
+@router.post("/v1beta/models/{model}:predict")
+@router.post("/v1/models/{model}:predict")
+async def gemini_predict(
+    fastapi_request: Request,
+    model: str,
+    api_key: str = Depends(get_api_key),
+):
+    try:
+        payload = await fastapi_request.json()
+        if not isinstance(payload, dict):
+            return JSONResponse(status_code=400, content={"error": {"message": "Predict request body must be a JSON object."}})
+        model, payload = _apply_gemini_native_model_options(model, payload)
+        client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
+        response = await predict_raw(client_to_use, model_to_call, _gemini_payload_to_imagen_predict_payload(payload))
+        return JSONResponse(content=response)
+    except Exception as e:
+        error_msg = f"Unexpected error in gemini_predict endpoint: {str(e)}"
         print(error_msg)
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": {"message": error_msg}})

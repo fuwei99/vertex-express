@@ -4,30 +4,32 @@ from typing import List, Dict, Any, Set
 from auth import get_api_key
 from model_loader import get_vertex_models, get_vertex_express_models, refresh_models_config_cache
 from credentials_manager import CredentialManager
+from gemini_native_models import get_gemini_native_models
 
 router = APIRouter()
 
 @router.get("/v1beta/models")
 async def list_gemini_models(api_key: str = Depends(get_api_key)):
-    await refresh_models_config_cache()
-
-    model_ids = sorted(set(await get_vertex_models()) | set(await get_vertex_express_models()))
+    models = get_gemini_native_models()
     return {
         "models": [
             {
-                "name": f"models/{model_id}",
-                "baseModelId": model_id,
+                "name": f"models/{model['id']}",
+                "baseModelId": model.get("baseModelId", model["id"]),
                 "version": "001",
-                "displayName": model_id,
-                "description": model_id,
+                "displayName": model.get("displayName", model["id"]),
+                "description": model.get("description", model["id"]),
                 "inputTokenLimit": 1048576,
                 "outputTokenLimit": 65536,
-                "supportedGenerationMethods": [
-                    "generateContent",
-                    "streamGenerateContent",
-                ],
+                "supportedGenerationMethods": model.get(
+                    "supportedGenerationMethods",
+                    [
+                        "generateContent",
+                        "streamGenerateContent",
+                    ],
+                ),
             }
-            for model_id in model_ids
+            for model in models
         ]
     }
 
