@@ -156,6 +156,8 @@ def _proxies() -> Optional[dict[str, str]]:
     proxy_url = app_config.PROXY_URL
     if not proxy_url:
         return None
+    if proxy_url.startswith("socks5://"):
+        proxy_url = "socks5h://" + proxy_url[len("socks5://"):]
     return {"http": proxy_url, "https": proxy_url}
 
 
