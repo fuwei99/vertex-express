@@ -7,6 +7,30 @@ from credentials_manager import CredentialManager
 
 router = APIRouter()
 
+@router.get("/v1beta/models")
+async def list_gemini_models(api_key: str = Depends(get_api_key)):
+    await refresh_models_config_cache()
+
+    model_ids = sorted(set(await get_vertex_models()) | set(await get_vertex_express_models()))
+    return {
+        "models": [
+            {
+                "name": f"models/{model_id}",
+                "baseModelId": model_id,
+                "version": "001",
+                "displayName": model_id,
+                "description": model_id,
+                "inputTokenLimit": 1048576,
+                "outputTokenLimit": 65536,
+                "supportedGenerationMethods": [
+                    "generateContent",
+                    "streamGenerateContent",
+                ],
+            }
+            for model_id in model_ids
+        ]
+    }
+
 @router.get("/v1/models")
 async def list_models(fastapi_request: Request, api_key: str = Depends(get_api_key)):
     await refresh_models_config_cache()

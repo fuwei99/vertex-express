@@ -1,12 +1,16 @@
 import base64
+import asyncio
 import json
+import os
 import re
+import traceback
 from enum import Enum
 from typing import Any, AsyncGenerator, Optional
 
 from curl_cffi import requests as curl_requests
 
 import config as app_config
+from node_manager import is_rate_limit_error, is_transient_proxy_error, switch_next_node
 
 
 class GeminiRestClientContext:
@@ -153,12 +157,50 @@ def _headers(ctx: GeminiRestClientContext) -> dict[str, str]:
 
 
 def _proxies() -> Optional[dict[str, str]]:
-    proxy_url = app_config.PROXY_URL
+    proxy_url = os.environ.get("PROXY_URL") or app_config.PROXY_URL
     if not proxy_url:
         return None
     if proxy_url.startswith("socks5://"):
         proxy_url = "socks5h://" + proxy_url[len("socks5://"):]
     return {"http": proxy_url, "https": proxy_url}
+
+
+def _proxy_log_value() -> str:
+    return os.environ.get("PROXY_URL") or app_config.PROXY_URL or "None"
+
+
+def _image_part_to_markdown(part: dict[str, Any]) -> Optional[dict[str, str]]:
+    inline_data = part.get("inlineData") or part.get("inline_data")
+    if isinstance(inline_data, dict):
+        mime_type = inline_data.get("mimeType") or inline_data.get("mime_type") or "image/png"
+        data = inline_data.get("data")
+        if isinstance(mime_type, str) and mime_type.startswith("image/") and isinstance(data, str) and data:
+            return {"text": f"![Image](data:{mime_type};base64,{data})"}
+
+    file_data = part.get("fileData") or part.get("file_data")
+    if isinstance(file_data, dict):
+        mime_type = file_data.get("mimeType") or file_data.get("mime_type") or "image/png"
+        file_uri = file_data.get("fileUri") or file_data.get("file_uri")
+        if isinstance(mime_type, str) and mime_type.startswith("image/") and isinstance(file_uri, str) and file_uri:
+            return {"text": f"![Image]({file_uri})"}
+
+    return None
+
+
+def convert_gemini_images_to_markdown(value: Any) -> Any:
+    if isinstance(value, list):
+        return [convert_gemini_images_to_markdown(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    markdown_part = _image_part_to_markdown(value)
+    if markdown_part is not None:
+        return markdown_part
+
+    return {
+        key: convert_gemini_images_to_markdown(item)
+        for key, item in value.items()
+    }
 
 
 async def _raise_for_status_with_body(response: Any) -> None:
@@ -196,6 +238,39 @@ async def generate_content(
         return _wrap_response(response.json())
 
 
+async def generate_content_raw(
+    ctx: GeminiRestClientContext,
+    model: str,
+    payload: dict[str, Any],
+) -> Any:
+    max_retries = max(0, int(getattr(app_config, "MAX_RETRIES_429", 6)))
+    retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
+    retry_count = 0
+    retries_on_current_node = 0
+
+    while True:
+        url = _build_url(ctx, model, "generateContent", stream=False)
+        print(f"INFO: Executing raw Gemini REST call (curl_cffi) to '{model}'. Proxy: {_proxy_log_value()}")
+        try:
+            async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
+                response = await session.post(url, json=payload, headers=_headers(ctx), timeout=300)
+                await _raise_for_status_with_body(response)
+                return convert_gemini_images_to_markdown(response.json())
+        except Exception as exc:
+            should_switch_node = is_rate_limit_error(exc) or is_transient_proxy_error(exc)
+            if retry_count < max_retries and should_switch_node:
+                retry_count += 1
+                retries_on_current_node += 1
+                print(f"WARNING: Retryable raw Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
+                if retries_on_current_node >= retries_before_switch:
+                    if not await switch_next_node(f"retryable raw generate error while calling {model}: {type(exc).__name__}"):
+                        raise
+                    retries_on_current_node = 0
+                await asyncio.sleep(0.2)
+                continue
+            raise
+
+
 async def stream_generate_content(
     ctx: GeminiRestClientContext,
     model: str,
@@ -222,3 +297,66 @@ async def stream_generate_content(
                     yield _wrap_response(json.loads(line))
                 except json.JSONDecodeError:
                     print(f"WARNING: Could not decode Gemini REST stream line: {line[:200]}")
+
+
+async def stream_generate_content_raw(
+    ctx: GeminiRestClientContext,
+    model: str,
+    payload: dict[str, Any],
+) -> AsyncGenerator[str, None]:
+    max_retries = max(0, int(getattr(app_config, "MAX_RETRIES_429", 6)))
+    retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
+    retry_count = 0
+    retries_on_current_node = 0
+
+    while True:
+        yielded_content = False
+        url = _build_url(ctx, model, "streamGenerateContent", stream=True)
+        print(f"INFO: Executing raw Gemini REST stream (curl_cffi) to '{model}'. Proxy: {_proxy_log_value()}")
+        try:
+            async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
+                async with session.stream("POST", url, json=payload, headers=_headers(ctx), timeout=300) as response:
+                    await _raise_for_status_with_body(response)
+                    async for line in response.aiter_lines():
+                        if isinstance(line, bytes):
+                            line = line.decode("utf-8", errors="replace")
+                        line = line.strip()
+                        if not line:
+                            continue
+                        yielded_content = True
+                        if line.startswith("data:"):
+                            raw_data = line[5:].strip()
+                            if raw_data and raw_data != "[DONE]":
+                                try:
+                                    line = "data: " + json.dumps(convert_gemini_images_to_markdown(json.loads(raw_data)))
+                                except json.JSONDecodeError:
+                                    pass
+                        elif not line.startswith(":"):
+                            try:
+                                line = "data: " + json.dumps(convert_gemini_images_to_markdown(json.loads(line)))
+                            except json.JSONDecodeError:
+                                pass
+                        if line.startswith("data:") or line.startswith(":"):
+                            yield f"{line}\n\n"
+                        else:
+                            yield f"data: {line}\n\n"
+            return
+        except Exception as exc:
+            should_switch_node = is_rate_limit_error(exc) or is_transient_proxy_error(exc)
+            if not yielded_content and retry_count < max_retries and should_switch_node:
+                retry_count += 1
+                retries_on_current_node += 1
+                print(f"WARNING: Retryable raw Gemini stream error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
+                if retries_on_current_node >= retries_before_switch:
+                    if await switch_next_node(f"retryable raw stream error while calling {model}: {type(exc).__name__}"):
+                        retries_on_current_node = 0
+                        await asyncio.sleep(0.2)
+                        continue
+                else:
+                    await asyncio.sleep(0.2)
+                    continue
+
+            print(f"ERROR: Raw Gemini REST stream failed for model '{model}': {type(exc).__name__} - {exc}")
+            traceback.print_exc()
+            yield f"data: {json.dumps({'error': {'message': str(exc)}})}\n\n"
+            return

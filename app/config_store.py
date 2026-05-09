@@ -25,14 +25,19 @@ _KEY_ALIASES = {
     "SSL_CERT_FILE": ("ssl_cert_file",),
     "MAX_RETRIES_429": ("max_retries_429",),
     "RETRIES_BEFORE_SWITCH": ("retries_before_switch",),
+    "PROJECT_ID_MAP": ("project_id_map",),
 }
 
 
 def load_config_json() -> dict[str, Any]:
     if not CONFIG_FILE.exists():
         # Try to restore from CONFIG environment variable
-        raw_config = os.environ.get("CONFIG")
+        raw_config = os.environ.get("CONFIG", "").strip()
         if raw_config:
+            # Strip potential quotes if they were added by shell/dotenv
+            if (raw_config.startswith("'") and raw_config.endswith("'")) or \
+               (raw_config.startswith('"') and raw_config.endswith('"')):
+                raw_config = raw_config[1:-1].strip()
             try:
                 data = json.loads(raw_config)
                 if isinstance(data, dict):
@@ -57,6 +62,8 @@ def _normalize_value(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, list):
         return ",".join(str(item).strip() for item in value if str(item).strip())
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
     return str(value)
 
 

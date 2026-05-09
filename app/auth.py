@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Header, Depends
+from fastapi import HTTPException, Header, Depends, Query
 from fastapi.security import APIKeyHeader
 from typing import Optional
 from config import API_KEY, HUGGINGFACE_API_KEY, HUGGINGFACE # Import API_KEY, HUGGINGFACE_API_KEY, HUGGINGFACE
@@ -23,6 +23,8 @@ api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 # Dependency for API key validation
 async def get_api_key(
     authorization: Optional[str] = Header(None),
+    x_goog_api_key: Optional[str] = Header(None, alias="x-goog-api-key"),
+    key: Optional[str] = Query(None),
     x_ip_token: Optional[str] = Header(None, alias="x-ip-token")
 ):
     # Check if Hugging Face auth is enabled
@@ -73,8 +75,22 @@ async def get_api_key(
             )
     else:
         # Fallback to Bearer token authentication if HUGGINGFACE env var is not "true"
-        if authorization is None:
-            detail_message = "Missing API key. Please include 'Authorization: Bearer YOUR_API_KEY' header."
+        api_key = None
+        if authorization is not None:
+            # Check if the header starts with "Bearer "
+            if not authorization.startswith("Bearer "):
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid API key format. Use 'Authorization: Bearer YOUR_API_KEY'"
+                )
+            api_key = authorization.replace("Bearer ", "")
+        elif x_goog_api_key is not None:
+            api_key = x_goog_api_key
+        elif key is not None:
+            api_key = key
+
+        if api_key is None:
+            detail_message = "Missing API key. Please include 'Authorization: Bearer YOUR_API_KEY', 'x-goog-api-key', or '?key=YOUR_API_KEY'."
             # Optionally, provide a hint if the HUGGINGFACE env var exists but is not "true"
             if os.getenv("HUGGINGFACE") is not None: # Check for existence, not value
                  detail_message += " (Note: HUGGINGFACE mode with x-ip-token is not currently active)."
@@ -82,17 +98,7 @@ async def get_api_key(
                 status_code=401,
                 detail=detail_message
             )
-        
-        # Check if the header starts with "Bearer "
-        if not authorization.startswith("Bearer "):
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid API key format. Use 'Authorization: Bearer YOUR_API_KEY'"
-            )
-        
-        # Extract the API key
-        api_key = authorization.replace("Bearer ", "")
-        
+
         # Validate the API key
         if not validate_api_key(api_key): # Call local validate_api_key
             raise HTTPException(

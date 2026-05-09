@@ -5,10 +5,17 @@ import asyncio
 import urllib.request
 import urllib.error
 from typing import Dict, Optional
+import config_store
 import config
 
 # Global cache for project IDs: {api_key: project_id}
-PROJECT_ID_CACHE: Dict[str, str] = {}
+_raw_cache = os.environ.get("PROJECT_ID_MAP", "{}")
+try:
+    PROJECT_ID_CACHE: Dict[str, str] = json.loads(_raw_cache)
+    if not isinstance(PROJECT_ID_CACHE, dict):
+        PROJECT_ID_CACHE = {}
+except Exception:
+    PROJECT_ID_CACHE = {}
 
 
 def _get_proxy_url() -> Optional[str]:
@@ -50,6 +57,13 @@ async def discover_project_id(api_key: str) -> str:
             project_id = match.group(1)
             PROJECT_ID_CACHE[api_key] = project_id
             print(f"INFO: Discovered project ID (Direct): {project_id}")
+            
+            # Persist to config.json
+            try:
+                config_store.write_config_values({"PROJECT_ID_MAP": PROJECT_ID_CACHE})
+            except Exception as e:
+                print(f"WARNING: Failed to persist PROJECT_ID_MAP: {e}")
+                
             return project_id
 
         raise Exception(f"Failed to discover project ID. Status: {status_code}, Response: {response_text[:500]}")

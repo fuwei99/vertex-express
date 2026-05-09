@@ -7,7 +7,7 @@ import os
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 if env_path.exists():
-    load_dotenv(dotenv_path=env_path)
+    load_dotenv(dotenv_path=env_path, override=True)
     print(f"INFO: Loaded environment variables from {env_path}")
 else:
     print(f"WARNING: .env file not found at {env_path}")

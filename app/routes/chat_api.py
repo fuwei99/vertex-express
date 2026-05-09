@@ -1,5 +1,7 @@
 import asyncio
 import json
+import re
+import traceback
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -24,8 +26,237 @@ from openai_handler import OpenAIDirectHandler
 from project_id_discovery import discover_project_id
 from credentials_manager import _refresh_auth
 from gemini_rest_client import GeminiRestClientContext
+from gemini_rest_client import generate_content_raw, stream_generate_content_raw
 
 router = APIRouter()
+
+EXPRESS_PREFIX = "[EXPRESS] "
+PAY_PREFIX = "[PAY]"
+MARKDOWN_DATA_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(data:(image/[^;)\s]+);base64,([^)]+)\)")
+
+
+def _split_markdown_images_to_gemini_parts(text: str) -> list[dict]:
+    parts = []
+    cursor = 0
+    for match in MARKDOWN_DATA_IMAGE_RE.finditer(text):
+        before = text[cursor:match.start()]
+        if before:
+            parts.append({"text": before})
+
+        mime_type, data = match.groups()
+        parts.append({"inlineData": {"mimeType": mime_type, "data": data}})
+        cursor = match.end()
+
+    after = text[cursor:]
+    if after:
+        parts.append({"text": after})
+
+    return parts
+
+
+def _convert_markdown_images_in_content(content: dict) -> dict:
+    updated_content = dict(content)
+    converted_parts = []
+    changed = False
+
+    for part in updated_content.get("parts") or []:
+        if isinstance(part, dict) and isinstance(part.get("text"), str) and MARKDOWN_DATA_IMAGE_RE.search(part["text"]):
+            converted_parts.extend(_split_markdown_images_to_gemini_parts(part["text"]))
+            changed = True
+        else:
+            converted_parts.append(part)
+
+    if changed:
+        updated_content["parts"] = converted_parts
+    return updated_content
+
+
+def _convert_request_markdown_images_to_inline_data(payload: dict) -> dict:
+    updated_payload = dict(payload)
+
+    if isinstance(updated_payload.get("contents"), list):
+        updated_payload["contents"] = [
+            _convert_markdown_images_in_content(content) if isinstance(content, dict) else content
+            for content in updated_payload["contents"]
+        ]
+
+    if isinstance(updated_payload.get("systemInstruction"), dict):
+        updated_payload["systemInstruction"] = _convert_markdown_images_in_content(updated_payload["systemInstruction"])
+
+    return updated_payload
+
+
+def _merge_generation_config(payload: dict, updates: dict) -> dict:
+    updated_payload = dict(payload)
+    generation_config = dict(updated_payload.get("generationConfig") or {})
+    generation_config.update(updates)
+    updated_payload["generationConfig"] = generation_config
+    return updated_payload
+
+
+def _apply_gemini_native_model_options(model: str, payload: dict) -> tuple[str, dict]:
+    model_to_call = model
+    payload_to_call = dict(payload)
+
+    is_grounded_search = model_to_call.endswith("-search")
+    is_nothinking_model = model_to_call.endswith("-nothinking")
+    is_max_thinking_model = model_to_call.endswith("-max")
+    is_2k_image_model = model_to_call.endswith("-2k")
+    is_4k_image_model = model_to_call.endswith("-4k")
+
+    if is_grounded_search:
+        model_to_call = model_to_call[:-len("-search")]
+    elif is_nothinking_model:
+        model_to_call = model_to_call[:-len("-nothinking")]
+    elif is_max_thinking_model:
+        model_to_call = model_to_call[:-len("-max")]
+    elif is_2k_image_model:
+        model_to_call = model_to_call[:-len("-2k")]
+    elif is_4k_image_model:
+        model_to_call = model_to_call[:-len("-4k")]
+
+    if is_grounded_search:
+        tools = list(payload_to_call.get("tools") or [])
+        tools.append({"googleSearch": {}})
+        payload_to_call["tools"] = tools
+
+    if is_2k_image_model or is_4k_image_model:
+        payload_to_call = _merge_generation_config(
+            payload_to_call,
+            {
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {"imageSize": "2k" if is_2k_image_model else "4k"},
+            },
+        )
+
+    if is_nothinking_model or is_max_thinking_model:
+        if is_nothinking_model:
+            budget = 128 if ("gemini-2.5-pro" in model_to_call or "gemini-3-pro" in model_to_call) else 0
+        else:
+            budget = 32768 if ("gemini-2.5-pro" in model_to_call or "gemini-3-pro" in model_to_call) else 24576
+
+        generation_config = dict(payload_to_call.get("generationConfig") or {})
+        thinking_config = dict(generation_config.get("thinkingConfig") or {})
+        thinking_config["thinkingBudget"] = budget
+        thinking_config["includeThoughts"] = budget != 0
+        generation_config["thinkingConfig"] = thinking_config
+        payload_to_call["generationConfig"] = generation_config
+
+    return model_to_call, payload_to_call
+
+
+async def _create_gemini_rest_context(fastapi_request: Request, model: str) -> tuple[GeminiRestClientContext, str]:
+    credential_manager_instance = fastapi_request.app.state.credential_manager
+    express_key_manager_instance = fastapi_request.app.state.express_key_manager
+    model_to_call = model
+
+    force_express = False
+    if model_to_call.startswith(PAY_PREFIX):
+        model_to_call = model_to_call[len(PAY_PREFIX):]
+
+    if model_to_call.startswith(EXPRESS_PREFIX):
+        force_express = True
+        model_to_call = model_to_call[len(EXPRESS_PREFIX):]
+
+    has_sa_creds = credential_manager_instance.get_total_credentials() > 0
+    has_express_key = express_key_manager_instance.get_total_keys() > 0
+    use_express = force_express or (has_express_key and not has_sa_creds)
+
+    if use_express:
+        if not has_express_key:
+            raise RuntimeError(f"Model '{model}' requires an Express API key, but none are configured.")
+        total_keys = express_key_manager_instance.get_total_keys()
+        last_error = None
+        for attempt in range(total_keys):
+            key_tuple = express_key_manager_instance.get_express_api_key()
+            if not key_tuple:
+                continue
+            original_idx, key_val = key_tuple
+            try:
+                project_id = await discover_project_id(key_val)
+                print(f"INFO: Native Gemini request using Express key index {original_idx} for model '{model_to_call}'")
+                return (
+                    GeminiRestClientContext(
+                        project_id=project_id,
+                        api_key=key_val,
+                        location="global",
+                    ),
+                    model_to_call,
+                )
+            except Exception as exc:
+                last_error = exc
+                print(f"WARNING: Native Gemini Express init failed on attempt {attempt + 1}/{total_keys}: {exc}")
+
+        raise RuntimeError(f"All configured Express API keys failed for model '{model}'. Last error: {last_error}")
+
+    if has_express_key and has_sa_creds:
+        print(f"INFO: Native Gemini request has both SA and Express auth; using SA for unprefixed model '{model_to_call}'")
+
+    rotated_credentials, rotated_project_id = credential_manager_instance.get_credentials()
+    if not rotated_credentials or not rotated_project_id:
+        raise RuntimeError(f"Model '{model}' requires SA credentials for Gemini, but none are available or loaded.")
+
+    gcp_token = _refresh_auth(rotated_credentials)
+    if not gcp_token:
+        raise RuntimeError(f"Failed to obtain valid GCP token for project {rotated_project_id}")
+
+    print(f"INFO: Native Gemini request using SA credential for model '{model_to_call}' (project: {rotated_project_id})")
+    return (
+        GeminiRestClientContext(
+            project_id=rotated_project_id,
+            bearer_token=gcp_token,
+            location="global",
+        ),
+        model_to_call,
+    )
+
+
+@router.post("/v1beta/models/{model}:generateContent")
+@router.post("/v1/models/{model}:generateContent")
+async def gemini_generate_content(
+    fastapi_request: Request,
+    model: str,
+    api_key: str = Depends(get_api_key),
+):
+    try:
+        payload = await fastapi_request.json()
+        if not isinstance(payload, dict):
+            return JSONResponse(status_code=400, content={"error": {"message": "Gemini request body must be a JSON object."}})
+        payload = _convert_request_markdown_images_to_inline_data(payload)
+        model, payload = _apply_gemini_native_model_options(model, payload)
+        client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
+        response = await generate_content_raw(client_to_use, model_to_call, payload)
+        return JSONResponse(content=response)
+    except Exception as e:
+        error_msg = f"Unexpected error in gemini_generate_content endpoint: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": {"message": error_msg}})
+
+
+@router.post("/v1beta/models/{model}:streamGenerateContent")
+@router.post("/v1/models/{model}:streamGenerateContent")
+async def gemini_stream_generate_content(
+    fastapi_request: Request,
+    model: str,
+    api_key: str = Depends(get_api_key),
+):
+    try:
+        payload = await fastapi_request.json()
+        if not isinstance(payload, dict):
+            return JSONResponse(status_code=400, content={"error": {"message": "Gemini request body must be a JSON object."}})
+        payload = _convert_request_markdown_images_to_inline_data(payload)
+        model, payload = _apply_gemini_native_model_options(model, payload)
+        client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
+        return StreamingResponse(
+            stream_generate_content_raw(client_to_use, model_to_call, payload),
+            media_type="text/event-stream",
+        )
+    except Exception as e:
+        error_msg = f"Unexpected error in gemini_stream_generate_content endpoint: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": {"message": error_msg}})
 
 @router.post("/v1/chat/completions")
 async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api_key: str = Depends(get_api_key)):
@@ -34,8 +265,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         OPENAI_DIRECT_SUFFIX = "-openai"
         OPENAI_SEARCH_SUFFIX = "-openaisearch"
         EXPERIMENTAL_MARKER = "-exp-"
-        PAY_PREFIX = "[PAY]"
-        EXPRESS_PREFIX = "[EXPRESS] " # Note the space for easier stripping
+        # Note the space in EXPRESS_PREFIX for easier stripping.
         
         # Model validation based on a predefined list has been removed as per user request.
         # The application will now attempt to use any provided model string.
