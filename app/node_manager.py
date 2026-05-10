@@ -4,6 +4,14 @@ from typing import Any
 from routes.admin_ui import _activate_node_by_uri, _fetch_subscription, _runtime_state
 
 
+def _node_priority(node: dict[str, Any]) -> int:
+    node_type = str(node.get("type", "")).lower()
+    raw_uri = str(node.get("raw_uri", "")).lower()
+    if node_type in ("vless", "a") or raw_uri.startswith("vless://"):
+        return 0
+    return 1
+
+
 def _sync_proxy_env(proxy_url: str) -> None:
     os.environ["PROXY_URL"] = proxy_url
     os.environ["HTTP_PROXY"] = proxy_url
@@ -22,6 +30,7 @@ async def initialize_from_subscription() -> None:
         node for node in nodes
         if not any(word in str(node.get("name", "")) for word in exclude_keywords)
     ]
+    valid_nodes = sorted(valid_nodes, key=_node_priority)
     _runtime_state["subscription_url"] = sub_url
     _runtime_state["node_pool"] = [
         {"raw_uri": node["raw_uri"], "name": node.get("name", node["raw_uri"][:80])}
