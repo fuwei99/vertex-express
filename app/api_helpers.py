@@ -464,17 +464,19 @@ async def execute_gemini_call(
                         return
                     except Exception as e_stream_call:
                         rate_limited = is_rate_limit_error(e_stream_call)
-                        should_switch_node = rate_limited or is_transient_proxy_error(e_stream_call)
+                        transient_proxy_error = is_transient_proxy_error(e_stream_call)
+                        should_retry = rate_limited or transient_proxy_error
                         if (
                             not yielded_content
                             and retry_count < max_retries
-                            and should_switch_node
+                            and should_retry
                         ):
                             retry_count += 1
-                            retries_on_current_node += 1
+                            retries_on_current_node = retries_on_current_node + 1 if transient_proxy_error else 0
                             mutate_next = rate_limited
-                            print(f"WARNING: Retryable Gemini stream error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(e_stream_call)[:800]}")
-                            if retries_on_current_node >= retries_before_switch:
+                            node_attempt = f"{retries_on_current_node}/{retries_before_switch}" if transient_proxy_error else "n/a"
+                            print(f"WARNING: Retryable Gemini stream error {retry_count}/{max_retries} on current node attempt {node_attempt}: {str(e_stream_call)[:800]}")
+                            if transient_proxy_error and retries_on_current_node >= retries_before_switch:
                                 if await switch_next_node(f"retryable stream error while calling {model_to_call}: {type(e_stream_call).__name__}"):
                                     retries_on_current_node = 0
                                     await asyncio.sleep(0.2)
@@ -512,16 +514,18 @@ async def execute_gemini_call(
                 break
             except Exception as e_call:
                 rate_limited = is_rate_limit_error(e_call)
-                should_switch_node = rate_limited or is_transient_proxy_error(e_call)
+                transient_proxy_error = is_transient_proxy_error(e_call)
+                should_retry = rate_limited or transient_proxy_error
                 if (
                     retry_count < max_retries
-                    and should_switch_node
+                    and should_retry
                 ):
                     retry_count += 1
-                    retries_on_current_node += 1
+                    retries_on_current_node = retries_on_current_node + 1 if transient_proxy_error else 0
                     mutate_next = rate_limited
-                    print(f"WARNING: Retryable Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(e_call)[:800]}")
-                    if retries_on_current_node >= retries_before_switch:
+                    node_attempt = f"{retries_on_current_node}/{retries_before_switch}" if transient_proxy_error else "n/a"
+                    print(f"WARNING: Retryable Gemini error {retry_count}/{max_retries} on current node attempt {node_attempt}: {str(e_call)[:800]}")
+                    if transient_proxy_error and retries_on_current_node >= retries_before_switch:
                         if not await switch_next_node(f"retryable error while calling {model_to_call}: {type(e_call).__name__}"):
                             raise
                         retries_on_current_node = 0

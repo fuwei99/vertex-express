@@ -397,13 +397,15 @@ async def generate_content_raw(
                 return convert_gemini_images_to_markdown(response.json())
         except Exception as exc:
             rate_limited = is_rate_limit_error(exc)
-            should_switch_node = rate_limited or is_transient_proxy_error(exc)
-            if retry_count < max_retries and should_switch_node:
+            transient_proxy_error = is_transient_proxy_error(exc)
+            should_retry = rate_limited or transient_proxy_error
+            if retry_count < max_retries and should_retry:
                 retry_count += 1
-                retries_on_current_node += 1
+                retries_on_current_node = retries_on_current_node + 1 if transient_proxy_error else 0
                 mutate_next = rate_limited
-                print(f"WARNING: Retryable raw Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
-                if retries_on_current_node >= retries_before_switch:
+                node_attempt = f"{retries_on_current_node}/{retries_before_switch}" if transient_proxy_error else "n/a"
+                print(f"WARNING: Retryable raw Gemini error {retry_count}/{max_retries} on current node attempt {node_attempt}: {str(exc)[:800]}")
+                if transient_proxy_error and retries_on_current_node >= retries_before_switch:
                     if not await switch_next_node(f"retryable raw generate error while calling {model}: {type(exc).__name__}"):
                         raise
                     retries_on_current_node = 0
@@ -437,13 +439,15 @@ async def predict_raw(
                 return convert_imagen_predictions_to_markdown(response.json())
         except Exception as exc:
             rate_limited = is_rate_limit_error(exc)
-            should_switch_node = rate_limited or is_transient_proxy_error(exc)
-            if retry_count < max_retries and should_switch_node:
+            transient_proxy_error = is_transient_proxy_error(exc)
+            should_retry = rate_limited or transient_proxy_error
+            if retry_count < max_retries and should_retry:
                 retry_count += 1
-                retries_on_current_node += 1
+                retries_on_current_node = retries_on_current_node + 1 if transient_proxy_error else 0
                 mutate_next = rate_limited
-                print(f"WARNING: Retryable raw Vertex predict error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
-                if retries_on_current_node >= retries_before_switch:
+                node_attempt = f"{retries_on_current_node}/{retries_before_switch}" if transient_proxy_error else "n/a"
+                print(f"WARNING: Retryable raw Vertex predict error {retry_count}/{max_retries} on current node attempt {node_attempt}: {str(exc)[:800]}")
+                if transient_proxy_error and retries_on_current_node >= retries_before_switch:
                     if not await switch_next_node(f"retryable raw predict error while calling {model}: {type(exc).__name__}"):
                         raise
                     retries_on_current_node = 0
@@ -532,13 +536,15 @@ async def stream_generate_content_raw(
             return
         except Exception as exc:
             rate_limited = is_rate_limit_error(exc)
-            should_switch_node = rate_limited or is_transient_proxy_error(exc)
-            if not yielded_content and retry_count < max_retries and should_switch_node:
+            transient_proxy_error = is_transient_proxy_error(exc)
+            should_retry = rate_limited or transient_proxy_error
+            if not yielded_content and retry_count < max_retries and should_retry:
                 retry_count += 1
-                retries_on_current_node += 1
+                retries_on_current_node = retries_on_current_node + 1 if transient_proxy_error else 0
                 mutate_next = rate_limited
-                print(f"WARNING: Retryable raw Gemini stream error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
-                if retries_on_current_node >= retries_before_switch:
+                node_attempt = f"{retries_on_current_node}/{retries_before_switch}" if transient_proxy_error else "n/a"
+                print(f"WARNING: Retryable raw Gemini stream error {retry_count}/{max_retries} on current node attempt {node_attempt}: {str(exc)[:800]}")
+                if transient_proxy_error and retries_on_current_node >= retries_before_switch:
                     if await switch_next_node(f"retryable raw stream error while calling {model}: {type(exc).__name__}"):
                         retries_on_current_node = 0
                         await asyncio.sleep(0.2)
