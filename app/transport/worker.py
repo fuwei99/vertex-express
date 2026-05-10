@@ -163,12 +163,19 @@ class WorkerManager:
         log_f = open(LOG_PATH, "ab")
         cmd = [str(binary), "run", "-c", str(CONFIG_PATH)]
         try:
-            # 使用 CREATE_NO_WINDOW 隐藏黑窗口，并确保完全独立的进程组
-            flags = subprocess.CREATE_NEW_PROCESS_GROUP
+            # 兼容性修复：仅在 Windows 下使用 creationflags
+            popen_kwargs = {
+                "stdout": log_f,
+                "stderr": log_f,
+            }
             if os.name == "nt":
-                flags |= 0x08000000 # CREATE_NO_WINDOW
+                # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | 0x08000000
+            else:
+                # Linux 下可以使用 start_new_session 达到类似隔离效果
+                popen_kwargs["start_new_session"] = True
             
-            proc = subprocess.Popen(cmd, stdout=log_f, stderr=log_f, creationflags=flags)
+            proc = subprocess.Popen(cmd, **popen_kwargs)
         except Exception as exc:
             log_f.close()
             raise RuntimeError(f"Worker start failed: {exc}")
