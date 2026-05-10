@@ -28,6 +28,7 @@ _KEY_ALIASES = {
     "ANTI429_ASSIST": ("anti429_enabled", "anti429_assist"),
     "PROXY_ROUTE_ENABLED": ("proxy_route_enabled", "anti_tracking"),
     "DROP_MAX_TOKENS": ("drop_max_tokens",),
+    "VERTEX_LOCATION": ("vertex_location", "location"),
     "PROJECT_ID_MAP": ("project_id_map",),
 }
 

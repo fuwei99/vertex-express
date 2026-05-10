@@ -26,7 +26,7 @@ from openai_handler import OpenAIDirectHandler
 from project_id_discovery import discover_project_id
 from credentials_manager import _refresh_auth
 from gemini_rest_client import GeminiRestClientContext
-from gemini_rest_client import drop_max_tokens_enabled, generate_content_raw, predict_raw, stream_generate_content_raw
+from gemini_rest_client import current_vertex_location, drop_max_tokens_enabled, generate_content_raw, predict_raw, stream_generate_content_raw
 from gemini_native_models import apply_native_model_config, get_gemini_native_model
 
 router = APIRouter()
@@ -274,6 +274,8 @@ async def _create_gemini_rest_context(fastapi_request: Request, model: str) -> t
     credential_manager_instance = fastapi_request.app.state.credential_manager
     express_key_manager_instance = fastapi_request.app.state.express_key_manager
     model_to_call = model
+    model_config = get_gemini_native_model(model)
+    location = str((model_config or {}).get("location") or current_vertex_location())
 
     force_express = False
     if model_to_call.startswith(PAY_PREFIX):
@@ -304,7 +306,7 @@ async def _create_gemini_rest_context(fastapi_request: Request, model: str) -> t
                     GeminiRestClientContext(
                         project_id=project_id,
                         api_key=key_val,
-                        location="global",
+                        location=location,
                     ),
                     model_to_call,
                 )
@@ -330,7 +332,7 @@ async def _create_gemini_rest_context(fastapi_request: Request, model: str) -> t
         GeminiRestClientContext(
             project_id=rotated_project_id,
             bearer_token=gcp_token,
-            location="global",
+            location=location,
         ),
         model_to_call,
     )
@@ -497,6 +499,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
 
         # This will now be a dictionary
         gen_config_dict = create_generation_config(request)
+        vertex_location = current_vertex_location()
 
         if "gemini-2.5-flash" in base_model_name or "gemini-2.5-pro" in base_model_name:
             if "thinking_config" not in gen_config_dict:
@@ -533,7 +536,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
                             client_to_use = GeminiRestClientContext(
                                 project_id=project_id,
                                 api_key=key_val,
-                                location="global",
+                                location=vertex_location,
                             )
                             print(f"INFO: Attempt {attempt+1}/{total_keys} - Using Vertex Express Mode with custom base URL for model {request.model} (base: {base_model_name}) with API key (original index: {original_idx}).")
                         else:
@@ -541,7 +544,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
                             client_to_use = GeminiRestClientContext(
                                 project_id=project_id,
                                 api_key=key_val,
-                                location="global",
+                                location=vertex_location,
                             )
                             print(f"INFO: Attempt {attempt+1}/{total_keys} - Using Vertex Express Mode REST for model {request.model} (base: {base_model_name}) with API key (original index: {original_idx}).")
                         break # Successfully initialized client
@@ -571,7 +574,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
                     client_to_use = GeminiRestClientContext(
                         project_id=rotated_project_id,
                         bearer_token=gcp_token,
-                        location="global",
+                        location=vertex_location,
                     )
                     print(f"INFO: Using SA credential for Gemini model {request.model} (project: {rotated_project_id})")
                 except Exception as e:

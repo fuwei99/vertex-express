@@ -29,6 +29,7 @@ _sessions: dict[str, float] = {}
 _runtime_state: dict[str, Any] = {
     "port_api": 8050,
     "debug": False,
+    "vertex_location": app_config.VERTEX_LOCATION,
     "max_retries_429": app_config.MAX_RETRIES_429,
     "retries_before_switch": app_config.RETRIES_BEFORE_SWITCH,
     "proxy_url": app_config.PROXY_URL or "",
@@ -428,6 +429,7 @@ class SettingsBody(BaseModel):
     max_retries_429: Optional[int] = None
     retries_before_switch: Optional[int] = None
     proxy_url: Optional[str] = None
+    vertex_location: Optional[str] = None
     admin_password: Optional[str] = None
     anti429_enabled: Optional[bool] = None
     anti429_target: Optional[str] = None
@@ -498,6 +500,7 @@ async def get_settings(request: Request) -> dict[str, Any]:
         "max_retries": int(getattr(app_config, "MAX_RETRIES_429", 6)),
         "max_retries_429": int(getattr(app_config, "MAX_RETRIES_429", 6)),
         "retries_before_switch": int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)),
+        "vertex_location": _runtime_state.get("vertex_location", getattr(app_config, "VERTEX_LOCATION", "global")),
         "proxy_url": _runtime_state.get("proxy_url", ""),
         "env_proxy_url_override": env_proxy,
         "admin_password_env_locked": False,
@@ -534,6 +537,11 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _write_env_mapping({"RETRIES_BEFORE_SWITCH": str(value)})
     if body.proxy_url is not None:
         _set_proxy_url(body.proxy_url.strip())
+    if body.vertex_location is not None:
+        value = body.vertex_location.strip() or "global"
+        _runtime_state["vertex_location"] = value
+        app_config.VERTEX_LOCATION = value
+        _write_env_mapping({"VERTEX_LOCATION": value})
     if body.admin_password is not None:
         if len(body.admin_password.strip()) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")

@@ -22,7 +22,7 @@ from api_helpers import (
 from message_processing import extract_reasoning_by_tags
 from credentials_manager import _refresh_auth
 from project_id_discovery import discover_project_id
-from gemini_rest_client import drop_max_tokens_enabled, proxy_route_enabled
+from gemini_rest_client import current_vertex_location, drop_max_tokens_enabled, proxy_route_enabled
 
 
 def _current_proxy_url() -> str:
@@ -63,10 +63,10 @@ class ExpressClientWrapper:
     httpx calls for Vertex AI Express Mode. This allows it to be used with the
     existing response handling logic.
     """
-    def __init__(self, project_id: str, api_key: str, location: str = "global"):
+    def __init__(self, project_id: str, api_key: str, location: str | None = None):
         self.project_id = project_id
         self.api_key = api_key
-        self.location = location
+        self.location = location or current_vertex_location()
         self.base_url = f"https://aiplatform.googleapis.com/v1beta1/projects/{self.project_id}/locations/{self.location}/endpoints/openapi"
         
         # The 'chat.completions' structure mimics the real OpenAI client
@@ -164,8 +164,9 @@ class OpenAIDirectHandler:
             {"category": 'HARM_CATEGORY_JAILBREAK', "threshold": safety_threshold}
         ]
 
-    def create_openai_client(self, project_id: str, gcp_token: str, location: str = "global") -> openai.AsyncOpenAI:
+    def create_openai_client(self, project_id: str, gcp_token: str, location: str | None = None) -> openai.AsyncOpenAI:
         """Create an OpenAI client configured for Vertex AI endpoint."""
+        location = location or current_vertex_location()
         endpoint_url = (
             f"https://aiplatform.googleapis.com/v1beta1/"
             f"projects/{project_id}/locations/{location}/endpoints/openapi"

@@ -218,6 +218,10 @@ def drop_max_tokens_enabled() -> bool:
     return bool(getattr(app_config, "DROP_MAX_TOKENS", False))
 
 
+def current_vertex_location() -> str:
+    return (os.environ.get("VERTEX_LOCATION") or getattr(app_config, "VERTEX_LOCATION", "global") or "global").strip() or "global"
+
+
 def _append_text_to_parts(parts: Any, text: str) -> list[Any]:
     if not isinstance(parts, list):
         return [{"text": text}]
