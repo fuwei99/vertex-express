@@ -2,6 +2,9 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -30,6 +33,7 @@ _KEY_ALIASES = {
     "DROP_MAX_TOKENS": ("drop_max_tokens",),
     "VERTEX_LOCATION": ("vertex_location", "location"),
     "AUTO_VERTEX_LOCATION": ("auto_vertex_location",),
+    "LOG_TIMEZONE": ("log_timezone",),
     "PROJECT_ID_MAP": ("project_id_map",),
     "PORT": ("port_api", "port"),
 }
@@ -82,25 +86,31 @@ def _lookup(data: dict[str, Any], env_key: str) -> Any:
     return None
 
 
-def apply_config_json_to_env(override: bool = False) -> dict[str, Any]:
+def apply_config_json_to_env(override: bool = True) -> dict[str, Any]:
     data = load_config_json()
     for env_key in _KEY_ALIASES:
         value = _lookup(data, env_key)
         if value is None:
             continue
+        # If override is True, always set it. Otherwise only if not already set.
         if override or not os.environ.get(env_key):
             os.environ[env_key] = _normalize_value(value)
     return data
 
 
 def get_config_value(env_key: str, default: str = "") -> str:
+    # 1. First priority: config.json
+    value = _lookup(load_config_json(), env_key)
+    if value is not None:
+        return _normalize_value(value).strip()
+    
+    # 2. Second priority: environment variables (including .env)
     raw_env = os.environ.get(env_key, "").strip()
     if raw_env:
         return raw_env
-    value = _lookup(load_config_json(), env_key)
-    if value is None:
-        return default
-    return _normalize_value(value).strip()
+        
+    # 3. Third priority: default value
+    return default
 
 
 def write_config_values(updates: dict[str, Any]) -> None:

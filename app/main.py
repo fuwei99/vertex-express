@@ -3,7 +3,39 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
+import builtins
+import json
 import os
+
+
+def _initial_log_timezone() -> str:
+    env_value = os.environ.get("LOG_TIMEZONE", "").strip()
+    if env_value:
+        return env_value
+    config_path = Path(__file__).resolve().parent.parent / "config.json"
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        if isinstance(data, dict):
+            return str(data.get("log_timezone") or data.get("LOG_TIMEZONE") or "Asia/Shanghai")
+    except Exception:
+        pass
+    return "Asia/Shanghai"
+
+
+LOG_TIMEZONE = ZoneInfo(_initial_log_timezone())
+_original_print = builtins.print
+
+
+def _timestamped_print(*args, **kwargs):
+    now = datetime.now(LOG_TIMEZONE)
+    tz_name = now.tzname() or "UTC"
+    prefix = f"[{now.strftime('%Y-%m-%d %H:%M:%S')}.{now.microsecond // 1000:03d} {tz_name}{now.strftime('%z')}]"
+    _original_print(prefix, *args, **kwargs)
+
+
+builtins.print = _timestamped_print
 
 env_path = Path(__file__).resolve().parent.parent / ".env"
 if env_path.exists():

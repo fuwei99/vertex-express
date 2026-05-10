@@ -13,8 +13,24 @@ set "CONFIG_FILE=%SCRIPT_DIR%config.json"
 set "ENV_FILE=%SCRIPT_DIR%.env"
 set "HOST=127.0.0.1"
 set "PORT=8050"
+if exist "%ENV_FILE%" (
+    for /f "usebackq tokens=* delims=" %%L in ("%ENV_FILE%") do (
+        set "LINE=%%L"
+        if defined LINE (
+            if not "!LINE:~0,1!"=="#" (
+                for /f "tokens=1* delims==" %%A in ("!LINE!") do (
+                    if "%%A"=="PORT" set "PORT=%%B"
+                    if "%%A"=="port_api" set "PORT=%%B"
+                )
+            )
+        )
+    )
+)
+
 if exist "%CONFIG_FILE%" (
-    for /f "usebackq tokens=*" %%p in (`"%PYTHON_EXE%" -c "import sys; sys.path.append(r'%APP_DIR%'); from config_store import get_config_value; print(get_config_value('PORT', '8050'))"`) do set "PORT=%%p"
+    if exist "%PYTHON_EXE%" (
+        for /f "usebackq tokens=*" %%p in (`""%PYTHON_EXE%" -c "import sys; sys.path.append(r'%APP_DIR%'); from config_store import get_config_value; print(get_config_value('PORT', '8050'))""`) do set "PORT=%%p"
+    )
 )
 
 echo ========================================
@@ -86,8 +102,9 @@ if errorlevel 1 (
 )
 
 if exist "%CONFIG_FILE%" (
-    echo [INFO] Found config.json. The application will load it on startup.
-) else if exist "%ENV_FILE%" (
+    echo [INFO] Found config.json.
+)
+if exist "%ENV_FILE%" (
     echo [INFO] Loading environment variables from .env...
     for /f "usebackq tokens=* delims=" %%L in ("%ENV_FILE%") do (
         set "LINE=%%L"
@@ -99,8 +116,6 @@ if exist "%CONFIG_FILE%" (
             )
         )
     )
-) else (
-    echo [WARN] config.json and .env were not found. The server will rely on existing environment variables.
 )
 
 echo [INFO] Starting Vertex API on http://%HOST%:%PORT%

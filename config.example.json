@@ -11,6 +11,7 @@
   "retries_before_switch": 1,
   "vertex_location": "global",
   "auto_vertex_location": false,
+  "log_timezone": "Asia/Shanghai",
   "fake_streaming": false,
   "fake_streaming_interval": 1.0,
   "safety_score": false,
