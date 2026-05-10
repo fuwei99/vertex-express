@@ -5,7 +5,8 @@
       "baseModelId": "gemini-3.1-pro-preview",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingLevel": "LOW"
+          "thinkingLevel": "LOW",
+          "includeThoughts": true
         }
       }
     },
@@ -14,7 +15,8 @@
       "baseModelId": "gemini-3.1-pro-preview",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingLevel": "HIGH"
+          "thinkingLevel": "HIGH",
+          "includeThoughts": true
         }
       }
     },
@@ -23,7 +25,8 @@
       "baseModelId": "gemini-3.1-flash-lite",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingLevel": "MINIMAL"
+          "thinkingLevel": "MINIMAL",
+          "includeThoughts": true
         }
       }
     },
@@ -32,7 +35,8 @@
       "baseModelId": "gemini-3-flash-preview",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingLevel": "MINIMAL"
+          "thinkingLevel": "MINIMAL",
+          "includeThoughts": true
         }
       }
     },
@@ -41,7 +45,8 @@
       "baseModelId": "gemini-3-flash-preview",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingLevel": "MEDIUM"
+          "thinkingLevel": "MEDIUM",
+          "includeThoughts": true
         }
       }
     },
@@ -50,7 +55,8 @@
       "baseModelId": "gemini-3-flash-preview",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingLevel": "HIGH"
+          "thinkingLevel": "HIGH",
+          "includeThoughts": true
         }
       }
     },
@@ -59,7 +65,8 @@
       "baseModelId": "gemini-2.5-pro",
       "generationConfig": {
         "thinkingConfig": {
-          "thinkingBudget": 128
+          "thinkingBudget": 128,
+          "includeThoughts": true
         }
       }
     },
@@ -112,7 +119,8 @@
           "IMAGE"
         ],
         "thinkingConfig": {
-          "thinkingLevel": "HIGH"
+          "thinkingLevel": "HIGH",
+          "includeThoughts": true
         }
       }
     },
@@ -128,7 +136,8 @@
           "imageSize": "2K"
         },
         "thinkingConfig": {
-          "thinkingLevel": "HIGH"
+          "thinkingLevel": "HIGH",
+          "includeThoughts": true
         }
       }
     },
@@ -144,7 +153,8 @@
           "imageSize": "4K"
         },
         "thinkingConfig": {
-          "thinkingLevel": "HIGH"
+          "thinkingLevel": "HIGH",
+          "includeThoughts": true
         }
       }
     },
