@@ -684,7 +684,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
                     budget = 32768 if ("gemini-2.5-pro" in base_model_name or "gemini-3-pro" in base_model_name) else 24576
                 gen_config_dict["thinking_config"]["thinking_budget"] = budget
                 if budget == 0:
-                    gen_config_dict["thinking_config"]["include_thoughts"] = False
+                    gen_config_dict["thinking_config"]["include_thoughts"] = True
 
             return await execute_gemini_call(client_to_use, base_model_name, current_prompt_func, gen_config_dict, request)
 
