@@ -150,3 +150,4 @@ multiple_credentials_implementation.md
 # Runtime proxy worker state
 worker-config.json
 vertex-api-local.*.log
+change-record/config.yaml

@@ -87,6 +87,32 @@ def _build_tls(params: dict[str, list[str]], host: str, security: str = "tls") -
     return tls
 
 
+def _server_ports_from_value(value: Any) -> list[str]:
+    if not value:
+        return []
+    values = value if isinstance(value, list) else [value]
+    ports: list[str] = []
+    for item in values:
+        text = str(item).strip()
+        if not text:
+            continue
+        for part in text.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part and ":" not in part:
+                start, end = part.split("-", 1)
+                part = f"{start.strip()}:{end.strip()}"
+            ports.append(part)
+    return ports
+
+
+def _apply_server_ports(outbound: dict[str, Any], value: Any) -> None:
+    ports = _server_ports_from_value(value)
+    if ports:
+        outbound["server_ports"] = ports
+
+
 def _build_transport(params: dict[str, list[str]]) -> Optional[dict[str, Any]]:
     def g(k: str, default: str = "") -> str:
         v = params.get(k, [default])
@@ -210,6 +236,7 @@ def _parse_f(uri: str) -> dict[str, Any]:
     host = u.hostname or ""
     password = u.username or u.password or params.get("auth", [""])[0] or ""
     outbound: dict[str, Any] = {"type": _P["f"], "server": host, "server_port": int(u.port or 443), "password": password}
+    _apply_server_ports(outbound, params.get("ports", [""])[0] or params.get("mport", [""])[0])
     tls_block: dict[str, Any] = {"enabled": True}
     sni = params.get("sni", [""])[0] or params.get("peer", [""])[0] or host
     if sni:
@@ -276,6 +303,7 @@ def _parse_j(uri: str) -> dict[str, Any]:
     params = parse_qs(u.query)
     host = u.hostname or ""
     outbound: dict[str, Any] = {"type": _P["j"], "server": host, "server_port": int(u.port or 443)}
+    _apply_server_ports(outbound, params.get("ports", [""])[0] or params.get("mport", [""])[0])
     auth = params.get("auth", [""])[0] or params.get("auth_str", [""])[0] or params.get("auth-str", [""])[0] or u.username or ""
     if auth:
         outbound["auth_str"] = auth
@@ -398,6 +426,7 @@ def _from_clash(p: dict[str, Any]) -> dict[str, Any]:
         return {"type": _P["d"], "server": host, "server_port": port, "method": p.get("cipher", ""), "password": p.get("password", "")}
     if t == _P["f"]:
         outbound = {"type": _P["f"], "server": host, "server_port": port, "password": p.get("password", "")}
+        _apply_server_ports(outbound, p.get("ports") or p.get("mport"))
         tls_block = {"enabled": True}
         sni = p.get("sni") or p.get("servername") or host
         if sni:
@@ -451,6 +480,7 @@ def _from_clash(p: dict[str, Any]) -> dict[str, Any]:
         return outbound
     if t == _P["j"]:
         outbound = {"type": _P["j"], "server": host, "server_port": port}
+        _apply_server_ports(outbound, p.get("ports") or p.get("mport"))
         auth = p.get("auth-str") or p.get("auth_str") or p.get("auth")
         if auth:
             outbound["auth_str"] = auth
