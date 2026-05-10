@@ -176,8 +176,8 @@ label{display:block;font-size:11px;color:var(--tx2);text-transform:uppercase;let
           <div style="display:flex;flex-direction:column;gap:10px">
             <div class="toggle-row"><div class="toggle-info"><div class="t-title">Proxy route enabled</div><div class="t-sub">Shows whether the current runtime has a configured manual or node-based proxy route.</div></div><label class="tog"><input type="checkbox" id="anti_tracking"><span class="tog-track"><span class="tog-thumb"></span></span></label></div>
             <div class="toggle-row"><div class="toggle-info"><div class="t-title">Drop max_tokens</div><div class="t-sub">Reserved placeholder mirrored from the reference panel for future request normalization.</div></div><label class="tog"><input type="checkbox" id="drop_max_tokens"><span class="tog-track"><span class="tog-thumb"></span></span></label></div>
-            <div class="toggle-row"><div class="toggle-info"><div class="t-title">Anti-429 assist</div><div class="t-sub">Reserved placeholder for future anti-429 request mutation support.</div></div><label class="tog"><input type="checkbox" id="anti429_enabled"><span class="tog-track"><span class="tog-thumb"></span></span></label></div>
-            <div class="field" style="padding:0 2px"><label>Anti-429 target</label><select id="anti429_target"><option value="system">System</option><option value="user">User</option></select></div>
+            <div class="toggle-row"><div class="toggle-info"><div class="t-title">Anti-429 assist</div><div class="t-sub">On 429 retries, mutate system and first user text with a random invalid filler block.</div></div><label class="tog"><input type="checkbox" id="anti429_enabled"><span class="tog-track"><span class="tog-thumb"></span></span></label></div>
+            <input type="hidden" id="anti429_target" value="system">
           </div>
           <div class="actions"><button class="btn btn-primary" onclick="saveProtection()">Save</button></div>
         </div>

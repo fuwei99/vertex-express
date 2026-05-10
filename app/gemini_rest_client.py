@@ -1,8 +1,10 @@
 import base64
 import asyncio
+import copy
 import json
 import os
 import re
+import secrets
 import traceback
 from enum import Enum
 from typing import Any, AsyncGenerator, Optional
@@ -11,6 +13,14 @@ from curl_cffi import requests as curl_requests
 
 import config as app_config
 from node_manager import is_rate_limit_error, is_transient_proxy_error, switch_next_node
+
+
+ANTI429_FILLER_TEMPLATE = (
+    "\n<invalid_filler_text>\n"
+    "[Padding text to meet word count, please ignore invalid text and do not mention it under any circumstance]\n"
+    "{nonce}\n"
+    "</invalid_filler_text>\n"
+)
 
 
 class GeminiRestClientContext:
@@ -179,6 +189,70 @@ def _proxy_log_value() -> str:
     return os.environ.get("PROXY_URL") or app_config.PROXY_URL or "None"
 
 
+def _make_anti429_filler() -> str:
+    return ANTI429_FILLER_TEMPLATE.format(nonce=secrets.token_hex(16))
+
+
+def anti429_assist_enabled() -> bool:
+    env_value = os.environ.get("ANTI429_ASSIST")
+    if env_value is not None:
+        return env_value.lower() == "true"
+    return bool(getattr(app_config, "ANTI429_ASSIST", False))
+
+
+def _append_text_to_parts(parts: Any, text: str) -> list[Any]:
+    if not isinstance(parts, list):
+        return [{"text": text}]
+
+    updated_parts = list(parts)
+    for index, part in enumerate(updated_parts):
+        if isinstance(part, dict) and isinstance(part.get("text"), str):
+            updated_part = dict(part)
+            updated_part["text"] = updated_part["text"] + text
+            updated_parts[index] = updated_part
+            return updated_parts
+
+    return [{"text": text}] + updated_parts
+
+
+def apply_anti429_prompt_filler(payload: dict[str, Any]) -> dict[str, Any]:
+    filler = _make_anti429_filler()
+    mutated = copy.deepcopy(payload)
+
+    system_instruction = mutated.get("systemInstruction")
+    if isinstance(system_instruction, dict):
+        system_instruction["parts"] = _append_text_to_parts(system_instruction.get("parts"), filler)
+    elif isinstance(system_instruction, str):
+        mutated["systemInstruction"] = {"parts": [{"text": system_instruction + filler}]}
+    else:
+        mutated["systemInstruction"] = {"parts": [{"text": filler}]}
+
+    contents = mutated.get("contents")
+    if isinstance(contents, list):
+        target_content = None
+        for content in contents:
+            if isinstance(content, dict) and content.get("role") == "user":
+                target_content = content
+                break
+        if target_content is None:
+            for content in contents:
+                if isinstance(content, dict):
+                    target_content = content
+                    break
+        if target_content is not None:
+            target_content["parts"] = _append_text_to_parts(target_content.get("parts"), filler)
+
+    instances = mutated.get("instances")
+    if isinstance(instances, list) and instances:
+        first_instance = instances[0]
+        if isinstance(first_instance, dict):
+            prompt = first_instance.get("prompt")
+            if isinstance(prompt, str):
+                first_instance["prompt"] = prompt + filler
+
+    return mutated
+
+
 def _image_part_to_markdown(part: dict[str, Any]) -> Optional[dict[str, str]]:
     inline_data = part.get("inlineData") or part.get("inline_data")
     if isinstance(inline_data, dict):
@@ -263,8 +337,11 @@ async def generate_content(
     model: str,
     contents: list[Any],
     config: dict[str, Any],
+    mutate_prompt: bool = False,
 ) -> Any:
     payload = build_payload(contents, config)
+    if mutate_prompt and anti429_assist_enabled():
+        payload = apply_anti429_prompt_filler(payload)
     url = _build_url(ctx, model, "generateContent", stream=False)
     print(f"INFO: Executing Gemini REST call (curl_cffi) to '{model}'. Proxy: {app_config.PROXY_URL or 'None'}")
     async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
@@ -282,20 +359,27 @@ async def generate_content_raw(
     retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
     retry_count = 0
     retries_on_current_node = 0
+    mutate_next = False
 
     while True:
         url = _build_url(ctx, model, "generateContent", stream=False)
         print(f"INFO: Executing raw Gemini REST call (curl_cffi) to '{model}'. Proxy: {_proxy_log_value()}")
         try:
+            should_mutate = mutate_next and anti429_assist_enabled()
+            payload_for_call = apply_anti429_prompt_filler(payload) if should_mutate else payload
+            if should_mutate:
+                print(f"INFO: Anti-429 assist mutated raw Gemini prompt for retry to '{model}'")
             async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
-                response = await session.post(url, json=payload, headers=_headers(ctx), timeout=300)
+                response = await session.post(url, json=payload_for_call, headers=_headers(ctx), timeout=300)
                 await _raise_for_status_with_body(response)
                 return convert_gemini_images_to_markdown(response.json())
         except Exception as exc:
-            should_switch_node = is_rate_limit_error(exc) or is_transient_proxy_error(exc)
+            rate_limited = is_rate_limit_error(exc)
+            should_switch_node = rate_limited or is_transient_proxy_error(exc)
             if retry_count < max_retries and should_switch_node:
                 retry_count += 1
                 retries_on_current_node += 1
+                mutate_next = rate_limited
                 print(f"WARNING: Retryable raw Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
                 if retries_on_current_node >= retries_before_switch:
                     if not await switch_next_node(f"retryable raw generate error while calling {model}: {type(exc).__name__}"):
@@ -315,20 +399,27 @@ async def predict_raw(
     retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
     retry_count = 0
     retries_on_current_node = 0
+    mutate_next = False
 
     while True:
         url = _build_predict_url(ctx, model)
         print(f"INFO: Executing raw Vertex predict call (curl_cffi) to '{model}'. Proxy: {_proxy_log_value()}")
         try:
+            should_mutate = mutate_next and anti429_assist_enabled()
+            payload_for_call = apply_anti429_prompt_filler(payload) if should_mutate else payload
+            if should_mutate:
+                print(f"INFO: Anti-429 assist mutated raw Vertex predict prompt for retry to '{model}'")
             async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
-                response = await session.post(url, json=payload, headers=_headers(ctx), timeout=300)
+                response = await session.post(url, json=payload_for_call, headers=_headers(ctx), timeout=300)
                 await _raise_for_status_with_body(response)
                 return convert_imagen_predictions_to_markdown(response.json())
         except Exception as exc:
-            should_switch_node = is_rate_limit_error(exc) or is_transient_proxy_error(exc)
+            rate_limited = is_rate_limit_error(exc)
+            should_switch_node = rate_limited or is_transient_proxy_error(exc)
             if retry_count < max_retries and should_switch_node:
                 retry_count += 1
                 retries_on_current_node += 1
+                mutate_next = rate_limited
                 print(f"WARNING: Retryable raw Vertex predict error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
                 if retries_on_current_node >= retries_before_switch:
                     if not await switch_next_node(f"retryable raw predict error while calling {model}: {type(exc).__name__}"):
@@ -344,8 +435,11 @@ async def stream_generate_content(
     model: str,
     contents: list[Any],
     config: dict[str, Any],
+    mutate_prompt: bool = False,
 ) -> AsyncGenerator[Any, None]:
     payload = build_payload(contents, config)
+    if mutate_prompt and anti429_assist_enabled():
+        payload = apply_anti429_prompt_filler(payload)
     url = _build_url(ctx, model, "streamGenerateContent", stream=True)
     print(f"INFO: Executing Gemini REST stream (curl_cffi) to '{model}'. Proxy: {app_config.PROXY_URL or 'None'}")
     async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
@@ -376,14 +470,19 @@ async def stream_generate_content_raw(
     retries_before_switch = max(1, int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)))
     retry_count = 0
     retries_on_current_node = 0
+    mutate_next = False
 
     while True:
         yielded_content = False
         url = _build_url(ctx, model, "streamGenerateContent", stream=True)
         print(f"INFO: Executing raw Gemini REST stream (curl_cffi) to '{model}'. Proxy: {_proxy_log_value()}")
         try:
+            should_mutate = mutate_next and anti429_assist_enabled()
+            payload_for_call = apply_anti429_prompt_filler(payload) if should_mutate else payload
+            if should_mutate:
+                print(f"INFO: Anti-429 assist mutated raw Gemini stream prompt for retry to '{model}'")
             async with curl_requests.AsyncSession(impersonate="chrome124", proxies=_proxies()) as session:
-                async with session.stream("POST", url, json=payload, headers=_headers(ctx), timeout=300) as response:
+                async with session.stream("POST", url, json=payload_for_call, headers=_headers(ctx), timeout=300) as response:
                     await _raise_for_status_with_body(response)
                     async for line in response.aiter_lines():
                         if isinstance(line, bytes):
@@ -410,10 +509,12 @@ async def stream_generate_content_raw(
                             yield f"data: {line}\n\n"
             return
         except Exception as exc:
-            should_switch_node = is_rate_limit_error(exc) or is_transient_proxy_error(exc)
+            rate_limited = is_rate_limit_error(exc)
+            should_switch_node = rate_limited or is_transient_proxy_error(exc)
             if not yielded_content and retry_count < max_retries and should_switch_node:
                 retry_count += 1
                 retries_on_current_node += 1
+                mutate_next = rate_limited
                 print(f"WARNING: Retryable raw Gemini stream error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(exc)[:800]}")
                 if retries_on_current_node >= retries_before_switch:
                     if await switch_next_node(f"retryable raw stream error while calling {model}: {type(exc).__name__}"):

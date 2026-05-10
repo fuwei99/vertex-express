@@ -50,3 +50,4 @@ SSL_CERT_FILE = os.environ.get("SSL_CERT_FILE")
 # Retry/node switching settings
 MAX_RETRIES_429 = int(os.environ.get("MAX_RETRIES_429", "6"))
 RETRIES_BEFORE_SWITCH = int(os.environ.get("RETRIES_BEFORE_SWITCH", "1"))
+ANTI429_ASSIST = os.environ.get("ANTI429_ASSIST", "false").lower() == "true"

@@ -34,6 +34,17 @@ router = APIRouter()
 EXPRESS_PREFIX = "[EXPRESS] "
 PAY_PREFIX = "[PAY]"
 MARKDOWN_DATA_IMAGE_RE = re.compile(r"!\[[^\]]*\]\(data:(image/[^;)\s]+);base64,([^)]+)\)")
+DEFAULT_GEMINI_SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF"},
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF"},
+    {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF"},
+]
+DEFAULT_IMAGEN_PARAMETERS = {
+    "safetySetting": "block_only_high",
+    "includeRaiReason": True,
+}
 
 
 def _split_markdown_images_to_gemini_parts(text: str) -> list[dict]:
@@ -95,6 +106,14 @@ def _merge_generation_config(payload: dict, updates: dict) -> dict:
     return updated_payload
 
 
+def _apply_default_gemini_safety(payload: dict) -> dict:
+    if "safetySettings" in payload:
+        return payload
+    updated_payload = dict(payload)
+    updated_payload["safetySettings"] = DEFAULT_GEMINI_SAFETY_SETTINGS
+    return updated_payload
+
+
 def _extract_prompt_from_gemini_payload(payload: dict) -> str:
     prompt_parts = []
     for content in payload.get("contents") or []:
@@ -115,6 +134,8 @@ def _gemini_payload_to_imagen_predict_payload(payload: dict) -> dict:
         prompt = _extract_prompt_from_gemini_payload(payload)
 
     parameters = dict(payload.get("parameters") or {})
+    for key, value in DEFAULT_IMAGEN_PARAMETERS.items():
+        parameters.setdefault(key, value)
     generation_config = dict(payload.get("generationConfig") or {})
     image_config = dict(generation_config.get("imageConfig") or {})
 
@@ -307,6 +328,7 @@ async def gemini_generate_content(
         if model_config and model_config.get("api") == "predict":
             response = await predict_raw(client_to_use, model_to_call, _gemini_payload_to_imagen_predict_payload(payload))
             return JSONResponse(content=_imagen_response_to_generate_content_response(response))
+        payload = _apply_default_gemini_safety(payload)
         response = await generate_content_raw(client_to_use, model_to_call, payload)
         return JSONResponse(content=response)
     except Exception as e:
@@ -337,6 +359,7 @@ async def gemini_stream_generate_content(
                 _single_event_stream(_imagen_response_to_generate_content_response(response)),
                 media_type="text/event-stream",
             )
+        payload = _apply_default_gemini_safety(payload)
         return StreamingResponse(
             stream_generate_content_raw(client_to_use, model_to_call, payload),
             media_type="text/event-stream",

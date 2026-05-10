@@ -37,7 +37,7 @@ _runtime_state: dict[str, Any] = {
     "active_node_name": "",
     "node_pool": [],
     "node_pool_index": 0,
-    "anti429_enabled": False,
+    "anti429_enabled": app_config.ANTI429_ASSIST,
     "anti429_target": "system",
     "force_no_stream": False,
     "anti_tracking": False,
@@ -538,7 +538,10 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         os.environ["ADMIN_PASSWORD"] = body.admin_password.strip()
         notes.append("Admin password updated")
     if body.anti429_enabled is not None:
-        _runtime_state["anti429_enabled"] = bool(body.anti429_enabled)
+        value = bool(body.anti429_enabled)
+        _runtime_state["anti429_enabled"] = value
+        app_config.ANTI429_ASSIST = value
+        _write_env_mapping({"ANTI429_ASSIST": "true" if value else "false"})
     if body.anti429_target is not None:
         _runtime_state["anti429_target"] = body.anti429_target
     if body.force_no_stream is not None:

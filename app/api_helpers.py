@@ -444,21 +444,26 @@ async def execute_gemini_call(
             async def _gemini_real_stream_generator_inner():
                 retry_count = 0
                 retries_on_current_node = 0
+                mutate_next = False
                 while True:
                     yielded_content = False
                     try:
+                        if mutate_next:
+                            print(f"INFO: Anti-429 assist mutating Gemini stream prompt for retry to '{model_to_call}'")
                         async for chunk_item_call in stream_generate_content(
                             current_client,
                             model_to_call,
                             actual_prompt_for_call,
                             gen_config_dict,
+                            mutate_prompt=mutate_next,
                         ):
                             yielded_content = True
                             yield convert_chunk_to_openai(chunk_item_call, request_obj.model, response_id_for_stream, 0)
                         yield "data: [DONE]\n\n"
                         return
                     except Exception as e_stream_call:
-                        should_switch_node = is_rate_limit_error(e_stream_call) or is_transient_proxy_error(e_stream_call)
+                        rate_limited = is_rate_limit_error(e_stream_call)
+                        should_switch_node = rate_limited or is_transient_proxy_error(e_stream_call)
                         if (
                             not yielded_content
                             and retry_count < max_retries
@@ -466,6 +471,7 @@ async def execute_gemini_call(
                         ):
                             retry_count += 1
                             retries_on_current_node += 1
+                            mutate_next = rate_limited
                             print(f"WARNING: Retryable Gemini stream error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(e_stream_call)[:800]}")
                             if retries_on_current_node >= retries_before_switch:
                                 if await switch_next_node(f"retryable stream error while calling {model_to_call}: {type(e_stream_call).__name__}"):
@@ -490,23 +496,29 @@ async def execute_gemini_call(
     else: # Non-streaming
         retry_count = 0
         retries_on_current_node = 0
+        mutate_next = False
         while True:
             try:
+                if mutate_next:
+                    print(f"INFO: Anti-429 assist mutating Gemini prompt for retry to '{model_to_call}'")
                 response_obj_call = await generate_content(
                     current_client,
                     model_to_call,
                     actual_prompt_for_call,
                     gen_config_dict,
+                    mutate_prompt=mutate_next,
                 )
                 break
             except Exception as e_call:
-                should_switch_node = is_rate_limit_error(e_call) or is_transient_proxy_error(e_call)
+                rate_limited = is_rate_limit_error(e_call)
+                should_switch_node = rate_limited or is_transient_proxy_error(e_call)
                 if (
                     retry_count < max_retries
                     and should_switch_node
                 ):
                     retry_count += 1
                     retries_on_current_node += 1
+                    mutate_next = rate_limited
                     print(f"WARNING: Retryable Gemini error {retry_count}/{max_retries} on current node attempt {retries_on_current_node}/{retries_before_switch}: {str(e_call)[:800]}")
                     if retries_on_current_node >= retries_before_switch:
                         if not await switch_next_node(f"retryable error while calling {model_to_call}: {type(e_call).__name__}"):

@@ -25,6 +25,7 @@ _KEY_ALIASES = {
     "SSL_CERT_FILE": ("ssl_cert_file",),
     "MAX_RETRIES_429": ("max_retries_429",),
     "RETRIES_BEFORE_SWITCH": ("retries_before_switch",),
+    "ANTI429_ASSIST": ("anti429_enabled", "anti429_assist"),
     "PROJECT_ID_MAP": ("project_id_map",),
 }
 
