@@ -519,6 +519,7 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
     notes: list[str] = []
     if body.port_api is not None:
         _runtime_state["port_api"] = body.port_api
+        _write_env_mapping({"PORT": body.port_api})
         notes.append("Port change requires a service restart")
     if body.debug is not None:
         _runtime_state["debug"] = bool(body.debug)
@@ -552,7 +553,7 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         value = bool(body.anti429_enabled)
         _runtime_state["anti429_enabled"] = value
         app_config.ANTI429_ASSIST = value
-        _write_env_mapping({"ANTI429_ASSIST": "true" if value else "false"})
+        _write_env_mapping({"ANTI429_ASSIST": value})
     if body.anti429_target is not None:
         _runtime_state["anti429_target"] = body.anti429_target
     if body.force_no_stream is not None:
@@ -565,12 +566,12 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _runtime_state["proxy_route_enabled"] = value
         _runtime_state["anti_tracking"] = value
         app_config.PROXY_ROUTE_ENABLED = value
-        _write_env_mapping({"PROXY_ROUTE_ENABLED": "true" if value else "false"})
+        _write_env_mapping({"PROXY_ROUTE_ENABLED": value})
     if body.drop_max_tokens is not None:
         value = bool(body.drop_max_tokens)
         _runtime_state["drop_max_tokens"] = value
         app_config.DROP_MAX_TOKENS = value
-        _write_env_mapping({"DROP_MAX_TOKENS": "true" if value else "false"})
+        _write_env_mapping({"DROP_MAX_TOKENS": value})
     return {"status": "ok", "notes": notes}
 
 

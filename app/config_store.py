@@ -30,6 +30,7 @@ _KEY_ALIASES = {
     "DROP_MAX_TOKENS": ("drop_max_tokens",),
     "VERTEX_LOCATION": ("vertex_location", "location"),
     "PROJECT_ID_MAP": ("project_id_map",),
+    "PORT": ("port_api", "port"),
 }
 
 

@@ -13,6 +13,9 @@ set "CONFIG_FILE=%SCRIPT_DIR%config.json"
 set "ENV_FILE=%SCRIPT_DIR%.env"
 set "HOST=127.0.0.1"
 set "PORT=8050"
+if exist "%CONFIG_FILE%" (
+    for /f "usebackq tokens=*" %%p in (`"%PYTHON_EXE%" -c "import sys; sys.path.append(r'%APP_DIR%'); from config_store import get_config_value; print(get_config_value('PORT', '8050'))"`) do set "PORT=%%p"
+)
 
 echo ========================================
 echo   Vertex API Local Startup
