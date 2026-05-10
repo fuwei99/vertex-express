@@ -51,3 +51,5 @@ SSL_CERT_FILE = os.environ.get("SSL_CERT_FILE")
 MAX_RETRIES_429 = int(os.environ.get("MAX_RETRIES_429", "6"))
 RETRIES_BEFORE_SWITCH = int(os.environ.get("RETRIES_BEFORE_SWITCH", "1"))
 ANTI429_ASSIST = os.environ.get("ANTI429_ASSIST", "false").lower() == "true"
+PROXY_ROUTE_ENABLED = os.environ.get("PROXY_ROUTE_ENABLED", "true").lower() == "true"
+DROP_MAX_TOKENS = os.environ.get("DROP_MAX_TOKENS", "false").lower() == "true"

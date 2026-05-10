@@ -3,6 +3,7 @@ OpenAI handler module for creating clients and processing OpenAI Direct mode res
 This module encapsulates all OpenAI-specific logic that was previously in chat_api.py.
 """
 import json
+import os
 import time
 import httpx
 from typing import Dict, Any, AsyncGenerator
@@ -21,6 +22,22 @@ from api_helpers import (
 from message_processing import extract_reasoning_by_tags
 from credentials_manager import _refresh_auth
 from project_id_discovery import discover_project_id
+from gemini_rest_client import drop_max_tokens_enabled, proxy_route_enabled
+
+
+def _current_proxy_url() -> str:
+    if not proxy_route_enabled():
+        return ""
+    return os.environ.get("PROXY_URL") or app_config.PROXY_URL or ""
+
+
+def _httpx_proxies() -> Dict[str, str] | None:
+    proxy_url = _current_proxy_url()
+    if not proxy_url:
+        return None
+    if proxy_url.startswith("socks"):
+        return {"all://": proxy_url}
+    return {"https://": proxy_url}
 
 
 # Wrapper classes to mimic OpenAI SDK responses for direct httpx calls
@@ -80,12 +97,7 @@ class ExpressClientWrapper:
         if 'extra_body' in payload:
             payload.update(payload.pop('extra_body'))
 
-        proxies = None
-        if app_config.PROXY_URL:
-            if app_config.PROXY_URL.startswith("socks"):
-                proxies = {"all://": app_config.PROXY_URL}
-            else:
-                proxies = {"https://": app_config.PROXY_URL}
+        proxies = _httpx_proxies()
 
         client_args = {'timeout': 300}
         if proxies:
@@ -118,12 +130,7 @@ class ExpressClientWrapper:
         if 'extra_body' in payload:
             payload.update(payload.pop('extra_body'))
 
-        proxies = None
-        if app_config.PROXY_URL:
-            if app_config.PROXY_URL.startswith("socks"):
-                proxies = {"all://": app_config.PROXY_URL}
-            else:
-                proxies = {"https://": app_config.PROXY_URL}
+        proxies = _httpx_proxies()
 
         client_args = {'timeout': 300}
         if proxies:
@@ -164,12 +171,7 @@ class OpenAIDirectHandler:
             f"projects/{project_id}/locations/{location}/endpoints/openapi"
         )
         
-        proxies = None
-        if app_config.PROXY_URL:
-            if app_config.PROXY_URL.startswith("socks"):
-                proxies = {"all://": app_config.PROXY_URL}
-            else:
-                proxies = {"https://": app_config.PROXY_URL}
+        proxies = _httpx_proxies()
 
         client_args = {}
         if proxies:
@@ -200,6 +202,8 @@ class OpenAIDirectHandler:
             params['web_search_options'] = {}
             
         openai_params = {k: v for k, v in params.items() if v is not None}
+        if drop_max_tokens_enabled():
+            openai_params.pop("max_tokens", None)
         if "reasoning_effort" in openai_params and openai_params["reasoning_effort"] not in ["low", "medium", "high"]:
             del openai_params["reasoning_effort"]
         return openai_params

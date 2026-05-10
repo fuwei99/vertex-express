@@ -20,7 +20,7 @@ from message_processing import (
 import config as app_config
 from config import VERTEX_REASONING_TAG
 from node_manager import is_rate_limit_error, is_transient_proxy_error, switch_next_node
-from gemini_rest_client import generate_content, stream_generate_content
+from gemini_rest_client import drop_max_tokens_enabled, generate_content, stream_generate_content
 
 class StreamingReasoningProcessor:
     def __init__(self, tag_name: str = VERTEX_REASONING_TAG):
@@ -125,7 +125,8 @@ def create_generation_config(request: OpenAIRequest) -> Dict[str, Any]:
         print(f"Detected -4k suffix, adding image generation config with 4k resolution")
     
     if request.temperature is not None: config["temperature"] = request.temperature
-    if request.max_tokens is not None: config["max_output_tokens"] = request.max_tokens
+    if request.max_tokens is not None and not drop_max_tokens_enabled():
+        config["max_output_tokens"] = request.max_tokens
     if request.top_p is not None: config["top_p"] = request.top_p
     if request.top_k is not None: config["top_k"] = request.top_k
     if request.stop is not None: config["stop_sequences"] = request.stop

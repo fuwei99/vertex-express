@@ -26,7 +26,7 @@ from openai_handler import OpenAIDirectHandler
 from project_id_discovery import discover_project_id
 from credentials_manager import _refresh_auth
 from gemini_rest_client import GeminiRestClientContext
-from gemini_rest_client import generate_content_raw, predict_raw, stream_generate_content_raw
+from gemini_rest_client import drop_max_tokens_enabled, generate_content_raw, predict_raw, stream_generate_content_raw
 from gemini_native_models import apply_native_model_config, get_gemini_native_model
 
 router = APIRouter()
@@ -111,6 +111,32 @@ def _apply_default_gemini_safety(payload: dict) -> dict:
         return payload
     updated_payload = dict(payload)
     updated_payload["safetySettings"] = DEFAULT_GEMINI_SAFETY_SETTINGS
+    return updated_payload
+
+
+def _drop_max_tokens_from_payload(payload: dict) -> dict:
+    if not drop_max_tokens_enabled():
+        return payload
+
+    updated_payload = dict(payload)
+    updated_payload.pop("max_tokens", None)
+    updated_payload.pop("maxOutputTokens", None)
+    updated_payload.pop("max_output_tokens", None)
+
+    generation_config = updated_payload.get("generationConfig")
+    if isinstance(generation_config, dict):
+        generation_config = dict(generation_config)
+        generation_config.pop("maxOutputTokens", None)
+        generation_config.pop("max_output_tokens", None)
+        updated_payload["generationConfig"] = generation_config
+
+    parameters = updated_payload.get("parameters")
+    if isinstance(parameters, dict):
+        parameters = dict(parameters)
+        parameters.pop("maxOutputTokens", None)
+        parameters.pop("max_output_tokens", None)
+        updated_payload["parameters"] = parameters
+
     return updated_payload
 
 
@@ -322,6 +348,7 @@ async def gemini_generate_content(
         if not isinstance(payload, dict):
             return JSONResponse(status_code=400, content={"error": {"message": "Gemini request body must be a JSON object."}})
         payload = _convert_request_markdown_images_to_inline_data(payload)
+        payload = _drop_max_tokens_from_payload(payload)
         model_config = get_gemini_native_model(model)
         model, payload = _apply_gemini_native_model_options(model, payload)
         client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
@@ -350,6 +377,7 @@ async def gemini_stream_generate_content(
         if not isinstance(payload, dict):
             return JSONResponse(status_code=400, content={"error": {"message": "Gemini request body must be a JSON object."}})
         payload = _convert_request_markdown_images_to_inline_data(payload)
+        payload = _drop_max_tokens_from_payload(payload)
         model_config = get_gemini_native_model(model)
         model, payload = _apply_gemini_native_model_options(model, payload)
         client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
@@ -382,6 +410,7 @@ async def gemini_predict(
         payload = await fastapi_request.json()
         if not isinstance(payload, dict):
             return JSONResponse(status_code=400, content={"error": {"message": "Predict request body must be a JSON object."}})
+        payload = _drop_max_tokens_from_payload(payload)
         model, payload = _apply_gemini_native_model_options(model, payload)
         client_to_use, model_to_call = await _create_gemini_rest_context(fastapi_request, model)
         response = await predict_raw(client_to_use, model_to_call, _gemini_payload_to_imagen_predict_payload(payload))

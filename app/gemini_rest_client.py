@@ -177,6 +177,8 @@ def _headers(ctx: GeminiRestClientContext) -> dict[str, str]:
 
 
 def _proxies() -> Optional[dict[str, str]]:
+    if not proxy_route_enabled():
+        return None
     proxy_url = os.environ.get("PROXY_URL") or app_config.PROXY_URL
     if not proxy_url:
         return None
@@ -186,6 +188,8 @@ def _proxies() -> Optional[dict[str, str]]:
 
 
 def _proxy_log_value() -> str:
+    if not proxy_route_enabled():
+        return "disabled"
     return os.environ.get("PROXY_URL") or app_config.PROXY_URL or "None"
 
 
@@ -198,6 +202,20 @@ def anti429_assist_enabled() -> bool:
     if env_value is not None:
         return env_value.lower() == "true"
     return bool(getattr(app_config, "ANTI429_ASSIST", False))
+
+
+def proxy_route_enabled() -> bool:
+    env_value = os.environ.get("PROXY_ROUTE_ENABLED")
+    if env_value is not None:
+        return env_value.lower() == "true"
+    return bool(getattr(app_config, "PROXY_ROUTE_ENABLED", True))
+
+
+def drop_max_tokens_enabled() -> bool:
+    env_value = os.environ.get("DROP_MAX_TOKENS")
+    if env_value is not None:
+        return env_value.lower() == "true"
+    return bool(getattr(app_config, "DROP_MAX_TOKENS", False))
 
 
 def _append_text_to_parts(parts: Any, text: str) -> list[Any]:

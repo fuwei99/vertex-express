@@ -40,8 +40,9 @@ _runtime_state: dict[str, Any] = {
     "anti429_enabled": app_config.ANTI429_ASSIST,
     "anti429_target": "system",
     "force_no_stream": False,
-    "anti_tracking": False,
-    "drop_max_tokens": False,
+    "proxy_route_enabled": app_config.PROXY_ROUTE_ENABLED,
+    "anti_tracking": app_config.PROXY_ROUTE_ENABLED,
+    "drop_max_tokens": app_config.DROP_MAX_TOKENS,
 }
 
 def _read_env_value(key: str) -> str:
@@ -431,6 +432,7 @@ class SettingsBody(BaseModel):
     anti429_enabled: Optional[bool] = None
     anti429_target: Optional[str] = None
     force_no_stream: Optional[bool] = None
+    proxy_route_enabled: Optional[bool] = None
     anti_tracking: Optional[bool] = None
     drop_max_tokens: Optional[bool] = None
 
@@ -502,7 +504,8 @@ async def get_settings(request: Request) -> dict[str, Any]:
         "anti429_enabled": bool(_runtime_state.get("anti429_enabled", False)),
         "anti429_target": _runtime_state.get("anti429_target", "system"),
         "force_no_stream": bool(_runtime_state.get("force_no_stream", False)),
-        "anti_tracking": bool(_runtime_state.get("anti_tracking", False)),
+        "proxy_route_enabled": bool(_runtime_state.get("proxy_route_enabled", True)),
+        "anti_tracking": bool(_runtime_state.get("proxy_route_enabled", True)),
         "drop_max_tokens": bool(_runtime_state.get("drop_max_tokens", False)),
     }
 
@@ -546,10 +549,20 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _runtime_state["anti429_target"] = body.anti429_target
     if body.force_no_stream is not None:
         _runtime_state["force_no_stream"] = bool(body.force_no_stream)
-    if body.anti_tracking is not None:
-        _runtime_state["anti_tracking"] = bool(body.anti_tracking)
+    proxy_route_value = body.proxy_route_enabled
+    if proxy_route_value is None and body.anti_tracking is not None:
+        proxy_route_value = body.anti_tracking
+    if proxy_route_value is not None:
+        value = bool(proxy_route_value)
+        _runtime_state["proxy_route_enabled"] = value
+        _runtime_state["anti_tracking"] = value
+        app_config.PROXY_ROUTE_ENABLED = value
+        _write_env_mapping({"PROXY_ROUTE_ENABLED": "true" if value else "false"})
     if body.drop_max_tokens is not None:
-        _runtime_state["drop_max_tokens"] = bool(body.drop_max_tokens)
+        value = bool(body.drop_max_tokens)
+        _runtime_state["drop_max_tokens"] = value
+        app_config.DROP_MAX_TOKENS = value
+        _write_env_mapping({"DROP_MAX_TOKENS": "true" if value else "false"})
     return {"status": "ok", "notes": notes}
 
 
