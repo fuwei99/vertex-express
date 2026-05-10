@@ -29,7 +29,7 @@ if exist "%ENV_FILE%" (
 
 if exist "%CONFIG_FILE%" (
     if exist "%PYTHON_EXE%" (
-        for /f "usebackq tokens=*" %%p in (`""%PYTHON_EXE%" -c "import sys; sys.path.append(r'%APP_DIR%'); from config_store import get_config_value; print(get_config_value('PORT', '8050'))""`) do set "PORT=%%p"
+        for /f "delims=" %%p in ('"%PYTHON_EXE%" -c "import sys; sys.path.append(r'%APP_DIR%'); from config_store import get_config_value; print(get_config_value('PORT', '8050'))"') do set "PORT=%%p"
     )
 )
 
