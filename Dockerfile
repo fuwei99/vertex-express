@@ -3,18 +3,20 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-COPY app/requirements.txt .
-RUN pip cache purge && pip install --no-cache-dir -r requirements.txt
+# Using the root requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app/ .
+# Copy the entire project
+# .dockerignore will handle excluding unnecessary files
+COPY . .
 
-# Create a directory for the credentials
+# Ensure credentials directory exists
 RUN mkdir -p /app/credentials
 
-# Expose the port
-EXPOSE 8050
+# Switch to the app directory to run the application
+# This ensures that 'main:app' and sibling imports work correctly
+WORKDIR /app/app
 
-# Command to run the application
 # Use the default Hugging Face port 7860
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
