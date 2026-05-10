@@ -44,6 +44,7 @@ _runtime_state: dict[str, Any] = {
     "proxy_route_enabled": app_config.PROXY_ROUTE_ENABLED,
     "anti_tracking": app_config.PROXY_ROUTE_ENABLED,
     "drop_max_tokens": app_config.DROP_MAX_TOKENS,
+    "auto_vertex_location": app_config.AUTO_VERTEX_LOCATION,
 }
 
 def _read_env_value(key: str) -> str:
@@ -396,6 +397,50 @@ def _set_subscription_url(url: str) -> None:
     os.environ["SUBSCRIPTION_URL"] = url
 
 
+def _set_vertex_location(location: str) -> None:
+    value = (location or "global").strip() or "global"
+    _runtime_state["vertex_location"] = value
+    app_config.VERTEX_LOCATION = value
+    _write_env_mapping({"VERTEX_LOCATION": value})
+
+
+def _infer_vertex_location_from_node(name: str, uri: str = "") -> Optional[str]:
+    text = f"{name} {uri}".lower()
+    rules = [
+        (("日本", "jp", "japan", "tokyo", "osaka"), "asia-northeast1"),
+        (("韩国", "韓國", "kr", "korea", "seoul"), "asia-northeast3"),
+        (("香港", "hk", "hong kong"), "asia-east2"),
+        (("台湾", "台灣", "tw", "taiwan"), "asia-east1"),
+        (("新加坡", "sg", "singapore"), "asia-southeast1"),
+        (("印度", "in", "india", "mumbai"), "asia-south1"),
+        (("澳大利亚", "澳洲", "au", "australia", "sydney"), "australia-southeast1"),
+        (("美国", "美國", "us", "usa", "los angeles", "san jose", "new york"), "us-central1"),
+        (("加拿大", "ca", "canada"), "northamerica-northeast1"),
+        (("巴西", "br", "brazil"), "southamerica-east1"),
+        (("英国", "英國", "uk", "london"), "europe-west2"),
+        (("德国", "德國", "de", "germany", "frankfurt"), "europe-west3"),
+        (("荷兰", "荷蘭", "nl", "netherlands", "amsterdam"), "europe-west4"),
+        (("法国", "法國", "france", "paris", "marseille"), "europe-west9"),
+        (("欧洲", "歐洲", "eu", "europe"), "europe-west4"),
+    ]
+    for needles, location in rules:
+        if any(needle in text for needle in needles):
+            return location
+    return None
+
+
+def _apply_auto_vertex_location(name: str, uri: str) -> None:
+    if not bool(_runtime_state.get("auto_vertex_location", False)):
+        return
+    location = _infer_vertex_location_from_node(name, uri)
+    if not location:
+        return
+    previous = _runtime_state.get("vertex_location", getattr(app_config, "VERTEX_LOCATION", "global"))
+    if location != previous:
+        _set_vertex_location(location)
+        print(f"INFO: Auto Vertex location set to {location} for proxy node {name or uri[:80]}")
+
+
 def _activate_node_by_uri(uri: str, name: str, pool_index: int = 0) -> str:
     if not uri:
         raise HTTPException(status_code=400, detail="Node URI is empty")
@@ -408,6 +453,7 @@ def _activate_node_by_uri(uri: str, name: str, pool_index: int = 0) -> str:
         _runtime_state["active_node_uri"] = uri
         _runtime_state["active_node_name"] = name or uri
         _set_proxy_url(proxy_url)
+        _apply_auto_vertex_location(name or uri, uri)
         return proxy_url
     if not any(uri.startswith(scheme) for scheme in _DIRECT_SCHEMES):
         raise HTTPException(status_code=400, detail=f"Unsupported node protocol: {uri[:20]}")
@@ -415,6 +461,7 @@ def _activate_node_by_uri(uri: str, name: str, pool_index: int = 0) -> str:
     _runtime_state["active_node_uri"] = uri
     _runtime_state["active_node_name"] = name or uri
     _set_proxy_url(uri)
+    _apply_auto_vertex_location(name or uri, uri)
     return uri
 
 
@@ -437,6 +484,7 @@ class SettingsBody(BaseModel):
     proxy_route_enabled: Optional[bool] = None
     anti_tracking: Optional[bool] = None
     drop_max_tokens: Optional[bool] = None
+    auto_vertex_location: Optional[bool] = None
 
 
 class KeyBody(BaseModel):
@@ -501,6 +549,7 @@ async def get_settings(request: Request) -> dict[str, Any]:
         "max_retries_429": int(getattr(app_config, "MAX_RETRIES_429", 6)),
         "retries_before_switch": int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)),
         "vertex_location": _runtime_state.get("vertex_location", getattr(app_config, "VERTEX_LOCATION", "global")),
+        "auto_vertex_location": bool(_runtime_state.get("auto_vertex_location", False)),
         "proxy_url": _runtime_state.get("proxy_url", ""),
         "env_proxy_url_override": env_proxy,
         "admin_password_env_locked": False,
@@ -539,10 +588,17 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
     if body.proxy_url is not None:
         _set_proxy_url(body.proxy_url.strip())
     if body.vertex_location is not None:
-        value = body.vertex_location.strip() or "global"
-        _runtime_state["vertex_location"] = value
-        app_config.VERTEX_LOCATION = value
-        _write_env_mapping({"VERTEX_LOCATION": value})
+        _set_vertex_location(body.vertex_location)
+    if body.auto_vertex_location is not None:
+        value = bool(body.auto_vertex_location)
+        _runtime_state["auto_vertex_location"] = value
+        app_config.AUTO_VERTEX_LOCATION = value
+        _write_env_mapping({"AUTO_VERTEX_LOCATION": value})
+        if value and _runtime_state.get("active_node_uri"):
+            _apply_auto_vertex_location(
+                str(_runtime_state.get("active_node_name", "")),
+                str(_runtime_state.get("active_node_uri", "")),
+            )
     if body.admin_password is not None:
         if len(body.admin_password.strip()) < 6:
             raise HTTPException(status_code=400, detail="Password must be at least 6 characters")

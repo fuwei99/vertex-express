@@ -54,3 +54,4 @@ ANTI429_ASSIST = os.environ.get("ANTI429_ASSIST", "false").lower() == "true"
 PROXY_ROUTE_ENABLED = os.environ.get("PROXY_ROUTE_ENABLED", "true").lower() == "true"
 DROP_MAX_TOKENS = os.environ.get("DROP_MAX_TOKENS", "false").lower() == "true"
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
+AUTO_VERTEX_LOCATION = os.environ.get("AUTO_VERTEX_LOCATION", "false").lower() == "true"

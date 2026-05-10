@@ -29,6 +29,7 @@ _KEY_ALIASES = {
     "PROXY_ROUTE_ENABLED": ("proxy_route_enabled", "anti_tracking"),
     "DROP_MAX_TOKENS": ("drop_max_tokens",),
     "VERTEX_LOCATION": ("vertex_location", "location"),
+    "AUTO_VERTEX_LOCATION": ("auto_vertex_location",),
     "PROJECT_ID_MAP": ("project_id_map",),
     "PORT": ("port_api", "port"),
 }
