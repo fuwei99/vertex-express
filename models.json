@@ -159,6 +159,36 @@
       }
     },
     {
+      "id": "gemini-3.5-flash",
+      "baseModelId": "gemini-3.5-flash",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "MEDIUM",
+          "includeThoughts": true
+        }
+      }
+    },
+    {
+      "id": "gemini-3.5-flash-low",
+      "baseModelId": "gemini-3.5-flash",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "LOW",
+          "includeThoughts": true
+        }
+      }
+    },
+    {
+      "id": "gemini-3.5-flash-high",
+      "baseModelId": "gemini-3.5-flash",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "HIGH",
+          "includeThoughts": true
+        }
+      }
+    },
+    {
       "id": "imagen-4.0-ultra-generate-001",
       "baseModelId": "imagen-4.0-ultra-generate-001",
       "api": "predict",
