@@ -587,6 +587,7 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _write_env_mapping({"RETRIES_BEFORE_SWITCH": str(value)})
     if body.proxy_url is not None:
         _set_proxy_url(body.proxy_url.strip())
+    prev_location = _runtime_state.get("vertex_location", getattr(app_config, "VERTEX_LOCATION", "global"))
     if body.vertex_location is not None:
         _set_vertex_location(body.vertex_location)
     if body.auto_vertex_location is not None:
@@ -594,7 +595,8 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _runtime_state["auto_vertex_location"] = value
         app_config.AUTO_VERTEX_LOCATION = value
         _write_env_mapping({"AUTO_VERTEX_LOCATION": value})
-        if value and _runtime_state.get("active_node_uri"):
+        location_changed = (body.vertex_location is not None and body.vertex_location != prev_location)
+        if value and not location_changed and _runtime_state.get("active_node_uri"):
             _apply_auto_vertex_location(
                 str(_runtime_state.get("active_node_name", "")),
                 str(_runtime_state.get("active_node_uri", "")),
