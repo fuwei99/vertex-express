@@ -13,7 +13,7 @@ jobs:
 
     steps:
     - name: lowercase repository name
-      run: echo "IMAGE_NAME=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
+      run: echo "IMAGE_NAME=fuwei99/versibility" >> ${GITHUB_ENV}
       
     - uses: actions/checkout@v4
 
