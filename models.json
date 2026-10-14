@@ -208,17 +208,11 @@
     },
     {
       "id": "gemini-4-argon",
-      "baseModelId": "gemini-4-argon",
-      "excludeLocations": [
-        "global"
-      ]
+      "baseModelId": "gemini-4-argon"
     },
     {
       "id": "gemini-4-argon-low",
       "baseModelId": "gemini-4-argon",
-      "excludeLocations": [
-        "global"
-      ],
       "generationConfig": {
         "thinkingConfig": {
           "thinkingLevel": "low"
@@ -228,9 +222,6 @@
     {
       "id": "gemini-4-argon-medium",
       "baseModelId": "gemini-4-argon",
-      "excludeLocations": [
-        "global"
-      ],
       "generationConfig": {
         "thinkingConfig": {
           "thinkingLevel": "medium"
@@ -240,9 +231,6 @@
     {
       "id": "gemini-4-argon-high",
       "baseModelId": "gemini-4-argon",
-      "excludeLocations": [
-        "global"
-      ],
       "generationConfig": {
         "thinkingConfig": {
           "thinkingLevel": "high"
