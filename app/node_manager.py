@@ -1,7 +1,16 @@
+import asyncio
 import os
 import time
 from typing import Any, Optional
 import httpx
+
+# `_activate_node_by_uri` 是同步函数：它内部会 subprocess.Popen 重启 netcore worker
+# 并 time.sleep 等它就绪。直接在协程里调用会把**整个事件循环**焊死（本服务只有一个
+# uvicorn 进程、一个循环），期间 /v1/models、/admin 等所有请求全部排队——表现就是
+# "一边测模型，另一边面板都拉不起来"。切一次节点要遍历最多 12 个节点，所以一次
+# 阻塞就是 20~40 秒。因此所有调用点都必须丢进线程池（asyncio.to_thread）。
+async def _activate_node_async(*args, **kwargs):
+    return await asyncio.to_thread(_activate_node_by_uri, *args, **kwargs)
 
 from routes.admin_ui import _activate_node_by_uri, _fetch_subscription, _runtime_state
 
@@ -66,7 +75,7 @@ async def initialize_from_subscription() -> None:
         else:
             first = valid_nodes[0]
             try:
-                proxy_url = _activate_node_by_uri(first["raw_uri"], first.get("name", ""), pool_index=0)
+                proxy_url = await _activate_node_async(first["raw_uri"], first.get("name", ""), pool_index=0)
                 _sync_proxy_env(proxy_url)
                 print(f"INFO: Activated first fallback proxy node: {first.get('name', '')} -> {proxy_url}")
             except Exception as e:
@@ -85,7 +94,7 @@ async def switch_next_node(reason: str = "") -> bool:
         next_index = (current + offset) % len(pool)
         node = pool[next_index]
         try:
-            proxy_url = _activate_node_by_uri(
+            proxy_url = await _activate_node_async(
                 str(node.get("raw_uri", "")),
                 str(node.get("name", "")),
                 pool_index=next_index,
@@ -110,7 +119,7 @@ async def switch_next_node(reason: str = "") -> bool:
         next_index = (current + offset) % len(pool)
         node = pool[next_index]
         try:
-            proxy_url = _activate_node_by_uri(
+            proxy_url = await _activate_node_async(
                 str(node.get("raw_uri", "")),
                 str(node.get("name", "")),
                 pool_index=next_index,

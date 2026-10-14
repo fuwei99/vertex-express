@@ -45,6 +45,9 @@ _runtime_state: dict[str, Any] = {
     "anti_tracking": app_config.PROXY_ROUTE_ENABLED,
     "drop_max_tokens": app_config.DROP_MAX_TOKENS,
     "auto_vertex_location": app_config.AUTO_VERTEX_LOCATION,
+    "url_style": app_config.VERTEX_URL_STYLE,
+    "expand_model_variants": app_config.EXPAND_MODEL_VARIANTS,
+    "anti_truncation": app_config.ANTI_TRUNCATION,
 }
 
 def _read_env_value(key: str) -> str:
@@ -485,6 +488,9 @@ class SettingsBody(BaseModel):
     anti_tracking: Optional[bool] = None
     drop_max_tokens: Optional[bool] = None
     auto_vertex_location: Optional[bool] = None
+    url_style: Optional[str] = None
+    expand_model_variants: Optional[bool] = None
+    anti_truncation: Optional[bool] = None
 
 
 class KeyBody(BaseModel):
@@ -550,6 +556,9 @@ async def get_settings(request: Request) -> dict[str, Any]:
         "retries_before_switch": int(getattr(app_config, "RETRIES_BEFORE_SWITCH", 1)),
         "vertex_location": _runtime_state.get("vertex_location", getattr(app_config, "VERTEX_LOCATION", "global")),
         "auto_vertex_location": bool(_runtime_state.get("auto_vertex_location", False)),
+        "url_style": _runtime_state.get("url_style", getattr(app_config, "VERTEX_URL_STYLE", "long")),
+        "expand_model_variants": bool(_runtime_state.get("expand_model_variants", False)),
+        "anti_truncation": bool(_runtime_state.get("anti_truncation", True)),
         "proxy_url": _runtime_state.get("proxy_url", ""),
         "env_proxy_url_override": env_proxy,
         "admin_password_env_locked": False,
@@ -630,6 +639,27 @@ async def update_settings(body: SettingsBody, request: Request) -> dict[str, Any
         _runtime_state["drop_max_tokens"] = value
         app_config.DROP_MAX_TOKENS = value
         _write_env_mapping({"DROP_MAX_TOKENS": value})
+    if body.url_style is not None:
+        value = str(body.url_style).strip().lower()
+        if value not in ("long", "short"):
+            raise HTTPException(status_code=400, detail="url_style must be 'long' or 'short'")
+        _runtime_state["url_style"] = value
+        app_config.VERTEX_URL_STYLE = value
+        _write_env_mapping({"VERTEX_URL_STYLE": value})
+        notes.append("Upstream URL style set to " + value)
+    if body.expand_model_variants is not None:
+        value = bool(body.expand_model_variants)
+        _runtime_state["expand_model_variants"] = value
+        app_config.EXPAND_MODEL_VARIANTS = value
+        # 同时写进环境变量：models_api 优先读 os.environ
+        _write_env_mapping({"EXPAND_MODEL_VARIANTS": value})
+        notes.append("Model variant expansion " + ("enabled" if value else "disabled"))
+    if body.anti_truncation is not None:
+        value = bool(body.anti_truncation)
+        _runtime_state["anti_truncation"] = value
+        app_config.ANTI_TRUNCATION = value
+        _write_env_mapping({"ANTI_TRUNCATION": value})
+        notes.append("Anti-truncation " + ("enabled" if value else "disabled"))
     return {"status": "ok", "notes": notes}
 
 

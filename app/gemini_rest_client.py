@@ -13,6 +13,7 @@ from curl_cffi import requests as curl_requests
 
 import config as app_config
 from node_manager import is_rate_limit_error, is_transient_proxy_error, switch_next_node
+from region_rules import build_model_url, normalize_url_style
 
 
 ANTI429_FILLER_TEMPLATE = (
@@ -30,12 +31,22 @@ class GeminiRestClientContext:
         location: str = "global",
         api_key: Optional[str] = None,
         bearer_token: Optional[str] = None,
+        url_style: Optional[str] = None,
     ):
         self.project_id = project_id
         self.location = location
         self.api_key = api_key
         self.bearer_token = bearer_token
+        self.url_style = normalize_url_style(url_style or current_url_style())
         self.model_name = "gemini_rest_client"
+
+
+def current_url_style() -> str:
+    """上游 URL 形态。控制台开关 / 环境变量 VERTEX_URL_STYLE，默认 long。"""
+    raw = os.environ.get("VERTEX_URL_STYLE")
+    if raw is None or str(raw).strip() == "":
+        raw = getattr(app_config, "VERTEX_URL_STYLE", "long")
+    return normalize_url_style(raw)
 
 
 class EnumValue(str):
@@ -140,28 +151,14 @@ def build_payload(contents: list[Any], config: dict[str, Any]) -> dict[str, Any]
 
 
 def _build_url(ctx: GeminiRestClientContext, model: str, action: str, stream: bool) -> str:
-    url = (
-        "https://aiplatform.googleapis.com/v1/"
-        f"projects/{ctx.project_id}/locations/{ctx.location}/publishers/google/models/{model}:{action}"
-    )
-    params: list[str] = []
-    if stream:
-        params.append("alt=sse")
-    if ctx.api_key:
-        params.append(f"key={ctx.api_key}")
-    if params:
-        url += "?" + "&".join(params)
-    return url
+    # 形态（long/short）与区域都由 region_rules 决定；区域约束写在 models.json 里。
+    return build_model_url(ctx.project_id, ctx.location, model, action,
+                           stream=stream, api_key=ctx.api_key, style=ctx.url_style)
 
 
 def _build_predict_url(ctx: GeminiRestClientContext, model: str) -> str:
-    url = (
-        "https://aiplatform.googleapis.com/v1/"
-        f"projects/{ctx.project_id}/locations/{ctx.location}/publishers/google/models/{model}:predict"
-    )
-    if ctx.api_key:
-        url += f"?key={ctx.api_key}"
-    return url
+    return build_model_url(ctx.project_id, ctx.location, model, "predict",
+                           stream=False, api_key=ctx.api_key, style=ctx.url_style)
 
 
 def _headers(ctx: GeminiRestClientContext) -> dict[str, str]:

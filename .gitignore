@@ -152,3 +152,6 @@ worker-config.json
 vertex-api-local.*.log
 change-record/config.yaml
 README.md
+
+# 本机代理 worker 二进制（78M，第三方，不随仓库分发）
+bin/netcore

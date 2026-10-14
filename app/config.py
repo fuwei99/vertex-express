@@ -55,3 +55,11 @@ PROXY_ROUTE_ENABLED = os.environ.get("PROXY_ROUTE_ENABLED", "true").lower() == "
 DROP_MAX_TOKENS = os.environ.get("DROP_MAX_TOKENS", "false").lower() == "true"
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "global")
 AUTO_VERTEX_LOCATION = os.environ.get("AUTO_VERTEX_LOCATION", "false").lower() == "true"
+# 上游 URL 形态：long（默认，项目路径式，区域写在 locations/{loc}）/ short（Express 文档式，路径无项目与区域）
+VERTEX_URL_STYLE = os.environ.get("VERTEX_URL_STYLE", "long")
+# 是否自动为每个模型展开前缀/后缀变体（[EXPRESS]/[PAY]、-search/-encrypt/-auto/-nothinking…）。
+# 默认 false：只列显式存在的模型，变体请在「模型管理」的映射里自己注册。
+EXPAND_MODEL_VARIANTS = os.environ.get("EXPAND_MODEL_VARIANTS", "false").lower() == "true"
+# 工具调用抗截断：默认开。对**符合条件**的请求生效（真实工具/tool_choice/结构化输出/
+# 多候选/工具历史一律跳过）。模型名带 -antitrunc 后缀时强制开启。
+ANTI_TRUNCATION = os.environ.get("ANTI_TRUNCATION", "true").lower() == "true"

@@ -21,6 +21,7 @@ import config as app_config
 from config import VERTEX_REASONING_TAG
 from node_manager import is_rate_limit_error, is_transient_proxy_error, switch_next_node
 from gemini_rest_client import drop_max_tokens_enabled, generate_content, stream_generate_content
+from anti_truncation import StreamState, restore_chunk, restore_response
 
 class StreamingReasoningProcessor:
     def __init__(self, tag_name: str = VERTEX_REASONING_TAG):
@@ -423,7 +424,8 @@ async def execute_gemini_call(
     prompt_func: Callable[[List[OpenAIMessage]], List[types.Content]], 
     gen_config_dict: Dict[str, Any], 
     request_obj: OpenAIRequest, 
-    is_auto_attempt: bool = False
+    is_auto_attempt: bool = False,
+    anti_truncation_tool: Optional[str] = None,
 ):
     actual_prompt_for_call = prompt_func(request_obj.messages)
     client_model_name_for_log = getattr(current_client, 'model_name', 'unknown_direct_client_object')
@@ -446,6 +448,7 @@ async def execute_gemini_call(
                 retry_count = 0
                 retries_on_current_node = 0
                 mutate_next = False
+                at_state = StreamState(anti_truncation_tool) if anti_truncation_tool else None
                 while True:
                     yielded_content = False
                     try:
@@ -459,6 +462,10 @@ async def execute_gemini_call(
                             mutate_prompt=mutate_next,
                         ):
                             yielded_content = True
+                            if at_state is not None:
+                                # 抗截断：把合成工具的 partialArgs 分片还原成普通 text part，
+                                # 后面 convert_chunk_to_openai 就会照常转成 content 增量。
+                                chunk_item_call, _ = restore_chunk(chunk_item_call, at_state)
                             yield convert_chunk_to_openai(chunk_item_call, request_obj.model, response_id_for_stream, 0)
                         yield "data: [DONE]\n\n"
                         return
@@ -532,6 +539,10 @@ async def execute_gemini_call(
                     await asyncio.sleep(0.2)
                     continue
                 raise
+        if anti_truncation_tool:
+            # 抗截断（非流式）：把合成 functionCall 的 args.content 还原成普通 text part。
+            # 必须在 is_gemini_response_valid 之前做，否则「只有工具调用、没有正文」会被判为无效。
+            response_obj_call, _restored = restore_response(response_obj_call, anti_truncation_tool)
         if hasattr(response_obj_call, 'prompt_feedback') and \
            hasattr(response_obj_call.prompt_feedback, 'block_reason') and \
            response_obj_call.prompt_feedback.block_reason:

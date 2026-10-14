@@ -1,4 +1,8 @@
+import json
+import os
 import time
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Request
 from typing import List, Dict, Any, Set
 from auth import get_api_key
@@ -6,7 +10,33 @@ from model_loader import get_vertex_models, get_vertex_express_models, refresh_m
 from credentials_manager import CredentialManager
 from gemini_native_models import get_gemini_native_models
 
+import config as app_config
+
 router = APIRouter()
+
+# alias_map 存在本地 vertexModels.json 里（控制台「模型管理」页写入）。
+_VERTEX_MODELS_FILE = Path(__file__).resolve().parents[2] / "vertexModels.json"
+
+
+def expand_model_variants() -> bool:
+    """是否自动展开前缀/后缀变体。默认关；控制台开关或环境变量可打开。"""
+    raw = os.environ.get("EXPAND_MODEL_VARIANTS")
+    if raw is None or str(raw).strip() == "":
+        return bool(getattr(app_config, "EXPAND_MODEL_VARIANTS", False))
+    return str(raw).strip().lower() == "true"
+
+
+def _registered_variants() -> Dict[str, str]:
+    """映射里自己注册的变体：{客户端模型名: 目标基础模型}。读不到就返回空。"""
+    try:
+        data = json.loads(_VERTEX_MODELS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    alias = data.get("alias_map")
+    if not isinstance(alias, dict):
+        return {}
+    return {str(k).strip(): str(v).strip() for k, v in alias.items() if str(k).strip()}
+
 
 @router.get("/v1beta/models")
 async def list_gemini_models(api_key: str = Depends(get_api_key)):
@@ -54,6 +84,40 @@ async def list_models(fastapi_request: Request, api_key: str = Depends(get_api_k
     final_model_list: List[Dict[str, Any]] = []
     processed_ids: Set[str] = set()
     current_time = int(time.time())
+
+    # 默认不再自动展开前缀/后缀变体（[EXPRESS]/[PAY]、-search/-encrypt/-auto/
+    # -nothinking/-max/-2k/-4k/-openai…）。只列**显式存在**的模型：
+    #   ① vertexModels.json 里的基础模型
+    #   ② models.json 里已写好的条目（思考等级 -low/-high、图片等级 -2K/-4K 等）
+    #   ③ alias_map 里自己注册的映射
+    # 需要哪个变体就在映射里注册一条，不需要就不会出现。
+    # 想回到旧的自动展开行为：控制台打开「展开模型变体」开关，或设
+    # EXPAND_MODEL_VARIANTS=true。旧代码原样保留在下面。
+    if not expand_model_variants():
+        explicit: List[tuple[str, str]] = []
+        seen_base: Set[str] = set()
+        for model_id in list(raw_express_models) + list(raw_vertex_models):
+            if model_id not in seen_base:
+                seen_base.add(model_id)
+                explicit.append((model_id, model_id))
+        for entry in get_gemini_native_models():
+            explicit.append((entry["id"], str(entry.get("baseModelId") or entry["id"])))
+        for client_id, target in _registered_variants().items():
+            explicit.append((client_id, target))
+        for client_id, root in explicit:
+            if client_id in processed_ids:
+                continue
+            processed_ids.add(client_id)
+            final_model_list.append({
+                "id": client_id,
+                "object": "model",
+                "created": current_time,
+                "owned_by": "google",
+                "permission": [],
+                "root": root,
+                "parent": None,
+            })
+        return {"object": "list", "data": sorted(final_model_list, key=lambda x: x['id'])}
 
     def add_model_and_variants(base_id: str, prefix: str):
         """Adds a model and its variants to the list if not already present."""

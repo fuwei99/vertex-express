@@ -10,6 +10,7 @@ from google.genai import types
 
 # Local module imports
 from models import OpenAIRequest
+import config as app_config
 from auth import get_api_key
 from message_processing import (
     create_gemini_prompt,
@@ -28,6 +29,14 @@ from credentials_manager import _refresh_auth
 from gemini_rest_client import GeminiRestClientContext
 from gemini_rest_client import current_vertex_location, drop_max_tokens_enabled, generate_content_raw, predict_raw, stream_generate_content_raw
 from gemini_native_models import apply_native_model_config, get_gemini_native_model
+from region_rules import describe_plan, location_plan, resolve_location
+from anti_truncation import (
+    SUFFIX as ANTITRUNC_SUFFIX,
+    describe as describe_antitrunc,
+    prepare as prepare_antitrunc,
+    resolve_enabled as resolve_antitrunc,
+    skip_reason as antitrunc_skip_reason,
+)
 
 router = APIRouter()
 
@@ -275,7 +284,11 @@ async def _create_gemini_rest_context(fastapi_request: Request, model: str) -> t
     express_key_manager_instance = fastapi_request.app.state.express_key_manager
     model_to_call = model
     model_config = get_gemini_native_model(model)
-    location = str((model_config or {}).get("location") or current_vertex_location())
+    # 区域规则来自 models.json：location（钉定）/ locations（白名单）/ excludeLocations（排除）。
+    # 运行时区域可能已被「按节点自动切换」改过；若被该模型排除，这里会另选一个允许的区域。
+    location = resolve_location(model_config, current_vertex_location())
+    if model_config and (model_config.get("locations") or model_config.get("excludeLocations")):
+        print(describe_plan(location_plan(model_config, current_vertex_location()), model))
 
     force_express = False
     if model_to_call.startswith(PAY_PREFIX):
@@ -457,6 +470,8 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         is_max_thinking_model = request.model.endswith("-max")
         is_2k_image_model = request.model.endswith("-2k")
         is_4k_image_model = request.model.endswith("-4k")
+        # 抗截断标记后缀（自己注册才会用到；不带后缀时由全局开关决定）
+        is_antitrunc_model = request.model.endswith(ANTITRUNC_SUFFIX)
         base_model_name = request.model # Start with the full model name
 
         # Determine base_model_name by stripping known prefixes and suffixes
@@ -490,6 +505,7 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         elif is_max_thinking_model: base_model_name = base_model_name[:-len("-max")]
         elif is_2k_image_model: base_model_name = base_model_name[:-len("-2k")]
         elif is_4k_image_model: base_model_name = base_model_name[:-len("-4k")]
+        elif is_antitrunc_model: base_model_name = base_model_name[:-len(ANTITRUNC_SUFFIX)]
         
         # # Specific model variant checks (if any remain exclusive and not covered dynamically)
         # if is_nothinking_model and not (base_model_name.startswith("gemini-2.5-flash") or base_model_name == "gemini-2.5-pro-preview-06-05"):
@@ -515,7 +531,13 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
         # This client initialization logic is for Gemini models (i.e., non-OpenAI Direct models).
         # If 'is_openai_direct_model' is true, this section will be skipped, and the
         # dedicated 'if is_openai_direct_model:' block later will handle it.
-        if is_express_model_request: # Changed from elif to if
+        # 路由判定：显式 [EXPRESS] 前缀，或者「只有 Express key、没有任何付费凭证」时，
+        # 裸模型名也走 Express。少了这条兜底，去掉前缀后裸名会被误判成付费请求 → 401。
+        _has_sa_credentials = fastapi_request.app.state.credential_manager.get_total_credentials() > 0
+        use_express_route = is_express_model_request or (
+            express_key_manager_instance.get_total_keys() > 0 and not _has_sa_credentials)
+
+        if use_express_route: # Changed from elif to if
             if express_key_manager_instance.get_total_keys() == 0:
                 error_msg = f"Model '{request.model}' is an Express model and requires an Express API key, but none are configured."
                 print(f"ERROR: {error_msg}")
@@ -686,7 +708,27 @@ async def chat_completions(fastapi_request: Request, request: OpenAIRequest, api
                 if budget == 0:
                     gen_config_dict["thinking_config"]["include_thoughts"] = True
 
-            return await execute_gemini_call(client_to_use, base_model_name, current_prompt_func, gen_config_dict, request)
+            # ---- 抗截断传输 ----
+            # 优先级：models.json 的 antiTruncation > -antitrunc 后缀 > 控制台全局开关。
+            # 真实工具 / tool_choice / 结构化输出 / 多候选 / 工具历史 一律跳过——
+            # 抗截断会强制 tool_choice，套上去会让客户端的真工具永远调不到。
+            transport_tool = None
+            at_config = get_gemini_native_model(request.model) or get_gemini_native_model(base_model_name)
+            at_enabled, at_basis = resolve_antitrunc(
+                at_config, is_antitrunc_model, bool(getattr(app_config, "ANTI_TRUNCATION", True)))
+            at_skip = antitrunc_skip_reason(request)
+            if not at_skip and is_grounded_search:
+                at_skip = "grounded-search"          # 搜索工具与合成工具会抢 tool_choice
+            if at_enabled and not at_skip:
+                transport_tool, _at_contents, gen_config_dict = prepare_antitrunc([], gen_config_dict)
+                _base_prompt_func = current_prompt_func
+                current_prompt_func = (
+                    lambda messages, _b=_base_prompt_func, _e=_at_contents: _b(messages) + _e)
+            print(describe_antitrunc(at_enabled, at_basis, at_skip, transport_tool))
+
+            return await execute_gemini_call(client_to_use, base_model_name, current_prompt_func,
+                                             gen_config_dict, request,
+                                             anti_truncation_tool=transport_tool)
 
     except Exception as e:
         error_msg = f"Unexpected error in chat_completions endpoint: {str(e)}"
