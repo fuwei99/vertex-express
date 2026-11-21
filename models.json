@@ -236,6 +236,99 @@
           "thinkingLevel": "high"
         }
       }
+    },
+    {
+      "id": "gemini-4-carbon",
+      "baseModelId": "gemini-4-carbon"
+    },
+    {
+      "id": "gemini-4-carbon-low",
+      "baseModelId": "gemini-4-carbon",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "low"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-carbon-medium",
+      "baseModelId": "gemini-4-carbon",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "medium"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-carbon-high",
+      "baseModelId": "gemini-4-carbon",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "high"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-hydrogen",
+      "baseModelId": "gemini-4-hydrogen"
+    },
+    {
+      "id": "gemini-4-hydrogen-low",
+      "baseModelId": "gemini-4-hydrogen",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "low"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-hydrogen-medium",
+      "baseModelId": "gemini-4-hydrogen",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "medium"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-hydrogen-high",
+      "baseModelId": "gemini-4-hydrogen",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "high"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-neon",
+      "baseModelId": "gemini-4-neon"
+    },
+    {
+      "id": "gemini-4-neon-low",
+      "baseModelId": "gemini-4-neon",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "low"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-neon-medium",
+      "baseModelId": "gemini-4-neon",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "medium"
+        }
+      }
+    },
+    {
+      "id": "gemini-4-neon-high",
+      "baseModelId": "gemini-4-neon",
+      "generationConfig": {
+        "thinkingConfig": {
+          "thinkingLevel": "high"
+        }
+      }
     }
   ]
 }
